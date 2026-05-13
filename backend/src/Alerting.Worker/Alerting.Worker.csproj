@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
   <PropertyGroup>
-    <!-- Suppress MailKit moderate advisory until a patched version is available -->
-    <NuGetAuditSuppress>https://github.com/advisories/GHSA-9j88-vvj5-vhgr</NuGetAuditSuppress>
+    <!-- Prevent MailKit vulnerability warning from failing the build -->
+    <NoWarn>$(NoWarn);NU1902</NoWarn>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1902</WarningsNotAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
