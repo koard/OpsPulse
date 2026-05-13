@@ -124,20 +124,101 @@ async function collectPm2Processes() {
 }
 
 async function collectHostMetrics() {
-  const [cpuPercent, memoryPercent, diskPercent] = await Promise.all([
-    shellNumber("bash", ["-lc", "top -bn1 | awk '/Cpu/ { print 100 - $8 }'"]),
-    shellNumber("bash", ["-lc", "free | awk '/Mem:/ { printf \"%.1f\", $3 / $2 * 100 }'"]),
+  const [cpuPercent, memInfo, diskPercent, net] = await Promise.all([
+    measureCpuPercent(),
+    shellLines("bash", ["-lc", "free | awk '/Mem:/ { print $2, $3 }'"]),
     shellNumber("bash", ["-lc", "df / | awk 'NR==2 { gsub(\"%\", \"\", $5); print $5 }'"]),
+    measureNetworkMbps(),
   ]);
+
+  // Memory: used/total * 100
+  const [totalKb, usedKb] = memInfo.split(" ").map(Number);
+  const memoryPercent = totalKb > 0 ? parseFloat(((usedKb / totalKb) * 100).toFixed(1)) : 0;
 
   return {
     cpuPercent,
     memoryPercent,
     diskPercent,
-    networkInMbps: 0,
-    networkOutMbps: 0,
+    networkInMbps: net.inMbps,
+    networkOutMbps: net.outMbps,
   };
 }
+
+/** Read /proc/stat twice 500ms apart to get accurate CPU % */
+async function measureCpuPercent() {
+  function readStat() {
+    return shellLines("bash", ["-lc", "head -1 /proc/stat"]);
+  }
+
+  const [s1, s2] = await Promise.all([
+    readStat(),
+    new Promise((resolve) => setTimeout(resolve, 500)).then(readStat),
+  ]);
+
+  function parseStat(line) {
+    const parts = line.trim().split(/\s+/).slice(1).map(Number);
+    const idle = parts[3] + (parts[4] ?? 0); // idle + iowait
+    const total = parts.reduce((a, b) => a + b, 0);
+    return { idle, total };
+  }
+
+  const a = parseStat(s1);
+  const b = parseStat(s2);
+  const deltaTotal = b.total - a.total;
+  const deltaIdle = b.idle - a.idle;
+
+  if (deltaTotal === 0) return 0;
+  return parseFloat(((1 - deltaIdle / deltaTotal) * 100).toFixed(1));
+}
+
+/**
+ * Read /proc/net/dev twice 500ms apart to get accurate network throughput.
+ * Skips loopback (lo). Returns inMbps and outMbps.
+ */
+async function measureNetworkMbps() {
+  const INTERVAL_MS = 500;
+
+  function readNetDev() {
+    return shellLines("bash", ["-lc", "cat /proc/net/dev"]);
+  }
+
+  function parseNetDev(raw) {
+    let rxBytes = 0;
+    let txBytes = 0;
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      // Skip header lines and loopback
+      if (!trimmed || trimmed.startsWith("Inter") || trimmed.startsWith("face") || trimmed.startsWith("lo:")) {
+        continue;
+      }
+      const parts = trimmed.split(/\s+/);
+      // format: iface: rx_bytes rx_pkts ... tx_bytes ...
+      // after split: [0]=iface, [1]=rx_bytes, [9]=tx_bytes
+      rxBytes += Number(parts[1] ?? 0);
+      txBytes += Number(parts[9] ?? 0);
+    }
+    return { rxBytes, txBytes };
+  }
+
+  const [raw1, raw2] = await Promise.all([
+    readNetDev(),
+    new Promise((resolve) => setTimeout(resolve, INTERVAL_MS)).then(readNetDev),
+  ]);
+
+  const s1 = parseNetDev(raw1);
+  const s2 = parseNetDev(raw2);
+
+  const intervalSec = INTERVAL_MS / 1000;
+  const inMbps = parseFloat((((s2.rxBytes - s1.rxBytes) * 8) / 1_000_000 / intervalSec).toFixed(3));
+  const outMbps = parseFloat((((s2.txBytes - s1.txBytes) * 8) / 1_000_000 / intervalSec).toFixed(3));
+
+  return {
+    inMbps: Math.max(0, inMbps),
+    outMbps: Math.max(0, outMbps),
+  };
+}
+
+
 
 async function collectEndpoints() {
   return Promise.all([
@@ -181,6 +262,11 @@ async function shellNumber(command, args) {
   const { stdout } = await execFileAsync(command, args);
   const value = Number(stdout.trim());
   return Number.isFinite(value) ? value : 0;
+}
+
+async function shellLines(command, args) {
+  const { stdout } = await execFileAsync(command, args);
+  return stdout.trim();
 }
 
 main().catch((error) => {
