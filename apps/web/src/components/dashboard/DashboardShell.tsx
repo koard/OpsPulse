@@ -1064,6 +1064,26 @@ function formatShortTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatRelativeTime(value: string) {
+  const diff = Date.now() - new Date(value).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return formatShortTime(value);
+}
+
+const COMMIT_TYPE_RE = /^(feat|fix|refactor|chore|docs|test|style|perf|ci|build|revert)(\([^)]+\))?:\s*/;
+
+function parseCommitMessage(message: string): { type: string | null; rest: string } {
+  const match = message.match(COMMIT_TYPE_RE);
+  if (!match) return { type: null, rest: message };
+  return { type: match[1], rest: message.slice(match[0].length) };
+}
+
 function RunbookView() {
   return (
     <section className="panel runbook">
