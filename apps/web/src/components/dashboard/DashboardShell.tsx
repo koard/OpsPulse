@@ -753,7 +753,7 @@ function ActionsView({
       projectId,
       action,
       target: action === "pm2_restart_process" ? target : null,
-      requestedBy: "portfolio-user",
+      requestedBy: "dashboard-user",
       confirmation,
     };
     const response = await fetch("/api/commands", {
@@ -933,7 +933,7 @@ function DeploymentsView({
         projectId,
         action: toWireCommandAction(repository.repository.deployAction),
         target: null,
-        requestedBy: "portfolio-user",
+        requestedBy: "dashboard-user",
         confirmation: projectId,
       } satisfies CreateCommandInput),
     });

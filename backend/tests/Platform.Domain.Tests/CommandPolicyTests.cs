@@ -11,7 +11,7 @@ public sealed class CommandPolicyTests
             projectId: "dukefarm",
             action: "pm2_restart_process",
             target: "database",
-            requestedBy: "portfolio-user",
+            requestedBy: "dashboard-user",
             confirmation: "database",
             history: [],
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z"));
@@ -28,7 +28,7 @@ public sealed class CommandPolicyTests
             projectId: "dukefarm",
             action: "redeploy_backend",
             target: null,
-            requestedBy: "portfolio-user",
+            requestedBy: "dashboard-user",
             confirmation: "wrong-project",
             history: [],
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z"));
@@ -44,7 +44,7 @@ public sealed class CommandPolicyTests
             projectId: "dukefarm",
             action: "redeploy_backend",
             target: null,
-            requestedBy: "portfolio-user",
+            requestedBy: "dashboard-user",
             confirmation: "dukefarm",
             history: [],
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z"));
@@ -68,7 +68,7 @@ public sealed class CommandPolicyTests
             projectId: "dukefarm",
             action: action,
             target: null,
-            requestedBy: "portfolio-user",
+            requestedBy: "dashboard-user",
             confirmation: "dukefarm",
             history: [],
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z"));
@@ -89,7 +89,7 @@ public sealed class CommandPolicyTests
             projectId: "dukefarm",
             action: "rollback_backend",
             target: null,
-            requestedBy: "portfolio-user",
+            requestedBy: "dashboard-user",
             confirmation: "dukefarm",
             history: [older, newer],
             requestedAt: DateTimeOffset.Parse("2026-05-12T11:00:00Z"));
@@ -115,7 +115,7 @@ public sealed class CommandPolicyTests
             projectId: "dukefarm",
             action: "rollback_frontend",
             target: null,
-            requestedBy: "portfolio-user",
+            requestedBy: "dashboard-user",
             confirmation: "dukefarm",
             history: [backend, frontend],
             requestedAt: DateTimeOffset.Parse("2026-05-12T11:00:00Z"));
@@ -133,7 +133,7 @@ public sealed class CommandPolicyTests
             projectId: "dukefarm",
             action: "health_check_now",
             target: null,
-            requestedBy: "portfolio-user",
+            requestedBy: "dashboard-user",
             confirmation: "dukefarm",
             history: [],
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z")).Command!;
@@ -167,7 +167,7 @@ public sealed class CommandPolicyTests
             Action: action,
             Target: target,
             Status: OpsCommandStatus.Succeeded,
-            RequestedBy: "portfolio-user",
+            RequestedBy: "dashboard-user",
             RequestedAt: requestedAt,
             ClaimedAt: requestedAt.AddSeconds(2),
             FinishedAt: requestedAt.AddMinutes(2),

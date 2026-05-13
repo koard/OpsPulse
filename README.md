@@ -1,6 +1,6 @@
 # OpsPulse DevOps Monitoring Platform
 
-OpsPulse is a portfolio-ready monitoring platform designed around a real university-hosted workload: Ubuntu, Nginx reverse proxy, PM2, and three running processes named `frontend`, `admin`, and `backend`.
+OpsPulse is a monitoring platform designed around a real university-hosted workload: Ubuntu, Nginx reverse proxy, PM2, and three running processes named `frontend`, `admin`, and `backend`.
 
 The current MVP monitors one project well and keeps the architecture ready for more projects later.
 
@@ -42,7 +42,7 @@ docker compose up --build
 
 Docker Desktop needs to be running first. The dashboard is exposed at `http://localhost:3000`, and the gateway API is exposed at `http://localhost:5080`.
 
-## Portfolio Story
+## Project Story
 
 This project demonstrates:
 

@@ -2,7 +2,7 @@
 
 ## Product
 
-OpsPulse is a portfolio DevOps monitoring platform for a small but realistic microservice estate. It starts with one university-hosted project and is shaped so more projects can be onboarded later.
+OpsPulse is a DevOps monitoring platform for a small but realistic microservice estate. It starts with one university-hosted project and is shaped so more projects can be onboarded later.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ The seed project represents the current server:
 
 ## Dashboard
 
-The dashboard shows project health, health score, PM2 process table, endpoint checks, host resource meters, alert list, and recent timeline. It uses sample data when the backend is not running, so the portfolio demo remains usable.
+The dashboard shows project health, health score, PM2 process table, endpoint checks, host resource meters, alert list, and recent timeline. It uses sample data when the backend is not running, so the demo remains usable.
 
 ## Testing
 

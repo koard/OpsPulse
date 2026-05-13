@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "OpsPulse Monitoring",
-  description: "Portfolio DevOps monitoring platform for microservice estates.",
+  description: "DevOps monitoring platform for microservice estates.",
 };
 
 export default function RootLayout({

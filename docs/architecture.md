@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a realistic DevOps monitoring platform that can be shown in a portfolio and later attached to the current university-hosted project.
+Build a realistic DevOps monitoring platform that can be attached to the current university-hosted project.
 
 The first project runs on an Ubuntu server behind VPN access, with Nginx reverse proxy and PM2 managing `frontend`, `admin`, and `backend` processes.
 
