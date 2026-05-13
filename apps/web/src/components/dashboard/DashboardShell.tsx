@@ -536,34 +536,118 @@ function NetworkMeter({ metrics }: { metrics: HostMetrics }) {
 }
 
 function Sparkline({ points }: { points: TimelinePoint[] }) {
-  const width = 260;
-  const height = 96;
-  const maxLatency = Math.max(...points.map((point) => point.latencyMs), 1);
-  const scorePath = points
-    .map((point, index) => {
-      const x = (index / Math.max(points.length - 1, 1)) * width;
-      const y = height - (point.healthScore / 100) * height;
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const latencyPath = points
-    .map((point, index) => {
-      const x = (index / Math.max(points.length - 1, 1)) * width;
-      const y = height - (point.latencyMs / maxLatency) * height;
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
+  if (points.length < 2) {
+    return (
+      <div className="sparkline">
+        <div className="sparklineEmpty">Not enough data yet</div>
+      </div>
+    );
+  }
+
+  const W = 600;
+  const H = 120;
+  const PAD = { top: 12, right: 8, bottom: 4, left: 8 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const maxLatency = Math.max(...points.map((p) => p.latencyMs), 1);
+  const n = points.length;
+
+  // Generate a smooth cubic-bezier path
+  function smoothPath(getValue: (p: typeof points[0]) => number, flip = true) {
+    const coords = points.map((p, i) => ({
+      x: PAD.left + (i / (n - 1)) * chartW,
+      y: PAD.top + (flip ? 1 - getValue(p) : getValue(p)) * chartH,
+    }));
+    return coords
+      .map((pt, i) => {
+        if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+        const prev = coords[i - 1];
+        const cpx = (prev.x + pt.x) / 2;
+        return `C ${cpx.toFixed(1)} ${prev.y.toFixed(1)}, ${cpx.toFixed(1)} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+      })
+      .join(" ");
+  }
+
+  const scoreLine = smoothPath((p) => p.healthScore / 100);
+  const latencyLine = smoothPath((p) => p.latencyMs / maxLatency);
+
+  // Area fill path for score — close back down to bottom
+  const areaClose = ` L ${(PAD.left + chartW).toFixed(1)} ${(PAD.top + chartH).toFixed(1)} L ${PAD.left.toFixed(1)} ${(PAD.top + chartH).toFixed(1)} Z`;
+  const scoreArea = scoreLine + areaClose;
+
+  // Grid lines (3 horizontal)
+  const gridYs = [0.25, 0.5, 0.75].map((r) => PAD.top + r * chartH);
+
+  // X-axis labels — pick at most 5 evenly spaced
+  const labelCount = Math.min(5, n);
+  const labelIndices = Array.from({ length: labelCount }, (_, i) =>
+    Math.round((i / (labelCount - 1)) * (n - 1))
+  );
 
   return (
     <div className="sparkline">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Health trend">
-        <path d={latencyPath} className="latencyLine" />
-        <path d={scorePath} className="scoreLine" />
-      </svg>
-      <div className="timelineLabels">
-        {points.map((point) => (
-          <span key={point.at}>{point.at}</span>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label="Health and latency trend"
+        className="sparklineSvg"
+      >
+        <defs>
+          <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {gridYs.map((y) => (
+          <line
+            key={y}
+            x1={PAD.left}
+            x2={PAD.left + chartW}
+            y1={y}
+            y2={y}
+            className="sparklineGrid"
+          />
         ))}
+
+        {/* Area fill */}
+        <path d={scoreArea} fill="url(#scoreGrad)" />
+
+        {/* Latency dashed line */}
+        <path d={latencyLine} className="latencyLine" />
+
+        {/* Score solid line */}
+        <path d={scoreLine} className="scoreLine" />
+
+        {/* End dot on score line */}
+        {(() => {
+          const last = points[n - 1];
+          const x = PAD.left + chartW;
+          const y = PAD.top + (1 - last.healthScore / 100) * chartH;
+          return (
+            <circle cx={x} cy={y} r="4" className="scoreEndDot" />
+          );
+        })()}
+      </svg>
+
+      {/* X-axis labels */}
+      <div className="sparklineAxis">
+        {labelIndices.map((idx) => (
+          <span
+            key={points[idx].at}
+            style={{ left: `${(idx / (n - 1)) * 100}%` }}
+          >
+            {points[idx].at}
+          </span>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="sparklineLegend">
+        <span className="legendScore">Health score</span>
+        <span className="legendLatency">Latency</span>
       </div>
     </div>
   );

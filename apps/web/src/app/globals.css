@@ -396,8 +396,8 @@ a { color: inherit; }
 
 .sloRingContainer {
   position: relative;
-  width: 160px;
-  height: 160px;
+  width: 180px;
+  height: 180px;
   display: grid;
   place-items: center;
   filter: drop-shadow(0 0 30px rgba(45,212,191,0.2));
@@ -412,13 +412,13 @@ a { color: inherit; }
 .sloRingBg {
   fill: transparent;
   stroke: rgba(255,255,255,0.05);
-  stroke-width: 8;
+  stroke-width: 6;
 }
 
 .sloRingProgress {
   fill: transparent;
   stroke: var(--accent);
-  stroke-width: 8;
+  stroke-width: 6;
   stroke-linecap: round;
   stroke-dasharray: 283;
   transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);
@@ -434,14 +434,15 @@ a { color: inherit; }
 
 .sloRingValue {
   font-family: var(--font-mono);
-  font-size: 2.8rem;
+  font-size: 2.3rem;
   font-weight: 800;
   color: var(--text-primary);
   text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  letter-spacing: -0.02em;
 }
 
 .sloRingPercent {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--accent);
   opacity: 0.9;
@@ -647,17 +648,94 @@ a { color: inherit; }
 .networkMeter strong { color: var(--text-primary); font-size: .9rem; font-family: var(--font-mono); }
 
 /* ── Sparkline ─────────────────────────────────── */
-.sparkline svg { width: 100%; height: 110px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); }
-.scoreLine   { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-.latencyLine { fill: none; stroke: rgba(248,113,113,.6); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 4 4; }
-.timelineLabels {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: .7rem;
+.sparkline {
+  position: relative;
+  padding-bottom: 8px;
 }
+
+.sparklineSvg {
+  width: 100%;
+  height: 120px;
+  display: block;
+  overflow: visible;
+}
+
+.sparklineGrid {
+  stroke: rgba(255,255,255,0.04);
+  stroke-width: 1;
+}
+
+.scoreLine {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.latencyLine {
+  fill: none;
+  stroke: rgba(248,113,113,0.55);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 5 3;
+}
+
+.scoreEndDot {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+
+.sparklineAxis {
+  position: relative;
+  height: 20px;
+  margin-top: 4px;
+}
+
+.sparklineAxis span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.sparklineLegend {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.sparklineLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.sparklineLegend span::before {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+}
+
+.legendScore::before  { background: var(--accent); }
+.legendLatency::before { background: rgba(248,113,113,0.7); }
+
+.sparklineEmpty {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
 
 /* ── Alerts ────────────────────────────────────── */
 .alertItem {
