@@ -1028,6 +1028,16 @@ function DeploymentsView({
   onCommandCreated: (command: OpsCommand) => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
+  const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set());
+
+  function toggleExpand(id: string) {
+    setExpandedRepos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function refreshRepositories() {
     const response = await fetch("/api/repositories", { cache: "no-store" });
@@ -1118,7 +1128,6 @@ function DeploymentsView({
             {/* ── Card Header ── */}
             <div className="repoCardHeader">
               <div className="repoCardTitle">
-                <span className="repoServiceBadge">{repository.repository.service}</span>
                 <h3>{repository.repository.fullName}</h3>
               </div>
               <button
@@ -1201,36 +1210,56 @@ function DeploymentsView({
               <span className="repoCommitListLabel">Recent commits</span>
               {repository.recentCommits.length === 0 ? (
                 <div className="repoEmptyCommits">No commits synced yet</div>
-              ) : (
-                repository.recentCommits.map((commit) => {
-                  const { type, rest } = parseCommitMessage(
-                    commit.message.split("\n")[0],
-                  );
-                  return (
-                    <a
-                      className="repoCommitEntry"
-                      href={commit.url}
-                      key={`${repository.repository.id}-${commit.sha}`}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      {type && (
-                        <span className={`commitTypeChip type-${type}`}>{type}</span>
-                      )}
-                      <span className="repoCommitBody">
-                        <span className="repoCommitMsg">
-                          {type ? rest : commit.message.split("\n")[0]}
-                        </span>
-                        <span className="repoCommitMeta">
-                          <span>{commit.authorLogin || commit.authorName}</span>
-                          <span className="shaChip">{commit.sha.slice(0, 7)}</span>
-                        </span>
-                      </span>
-                      <ExternalLink aria-hidden="true" className="repoCommitLink" />
-                    </a>
-                  );
-                })
-              )}
+              ) : (() => {
+                const isExpanded = expandedRepos.has(repository.repository.id);
+                const visibleCommits = isExpanded
+                  ? repository.recentCommits
+                  : repository.recentCommits.slice(0, 5);
+                const hasMore = repository.recentCommits.length > 5;
+                return (
+                  <>
+                    {visibleCommits.map((commit) => {
+                      const { type, rest } = parseCommitMessage(
+                        commit.message.split("\n")[0],
+                      );
+                      return (
+                        <a
+                          className="repoCommitEntry"
+                          href={commit.url}
+                          key={`${repository.repository.id}-${commit.sha}`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {type && (
+                            <span className={`commitTypeChip type-${type}`}>{type}</span>
+                          )}
+                          <span className="repoCommitBody">
+                            <span className="repoCommitMsg">
+                              {type ? rest : commit.message.split("\n")[0]}
+                            </span>
+                            <span className="repoCommitMeta">
+                              <span>{commit.authorLogin || commit.authorName}</span>
+                              <span className="shaChip">{commit.sha.slice(0, 7)}</span>
+                            </span>
+                          </span>
+                          <ExternalLink aria-hidden="true" className="repoCommitLink" />
+                        </a>
+                      );
+                    })}
+                    {hasMore && (
+                      <button
+                        className="repoExpandBtn"
+                        onClick={() => toggleExpand(repository.repository.id)}
+                        type="button"
+                      >
+                        {isExpanded
+                          ? "Show less"
+                          : `Show ${repository.recentCommits.length - 5} more`}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </article>
         ))

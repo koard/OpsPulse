@@ -889,7 +889,7 @@ a { color: inherit; }
 /* ── Deployments (Vercel/GitHub inspired) ──────── */
 .deploymentGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -926,19 +926,6 @@ a { color: inherit; }
   padding: 20px 20px 0;
 }
 .repoCardTitle { min-width: 0; }
-.repoServiceBadge {
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: var(--accent-dim);
-  border: 1px solid var(--border-accent);
-  color: var(--accent);
-  font-size: .7rem;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-}
 .repoCardTitle h3 {
   margin: 0;
   font-size: .95rem;
@@ -1171,6 +1158,30 @@ a { color: inherit; }
 }
 .repoCommitLink { width: 13px; height: 13px; color: var(--text-muted); flex-shrink: 0; opacity: 0; transition: opacity .15s; }
 .repoCommitEntry:hover .repoCommitLink { opacity: 1; }
+
+.repoExpandBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: .02em;
+}
+.repoExpandBtn:hover {
+  border-color: var(--border-accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
 
 /* ── Commit Type Chips ─────────────────────────── */
 .commitTypeChip {
