@@ -809,82 +809,244 @@ a { color: inherit; }
 .driftList { display: grid; gap: 6px; border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; }
 .driftList small { color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.75rem; }
 
-/* ── Action form ───────────────────────────────── */
-.actionForm { display: grid; gap: 20px; }
+/* ── Actions Panel ─────────────────────────────── */
+.actionsPanel { display: flex; flex-direction: column; gap: 0; }
 
-/* Custom Radio Selector */
-.actionSelector { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-.actionOption {
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 14px 16px;
+/* Category list */
+.actionCategoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.actionGroup { display: flex; flex-direction: column; gap: 2px; }
+
+.actionGroupLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 8px 4px;
+}
+
+.actionGroupItems { display: flex; flex-direction: column; gap: 1px; }
+
+.actionRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-raised);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: .85rem;
   cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-}
-.actionOption:hover { border-color: rgba(148,163,184,.4); background: var(--bg-hover); }
-.actionOption input[type="radio"] { position: absolute; opacity: 0; }
-.actionOption:has(input:checked) {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-.actionOption strong { font-size: 0.9rem; color: var(--text-primary); font-weight: 600; }
-.actionOption span { font-size: 0.75rem; color: var(--text-muted); }
-.actionOption:has(input:checked) strong { color: var(--accent); }
-.actionOption:has(input:checked) span { color: rgba(45,212,191,0.8); }
-
-.actionForm label.inputLabel { display: grid; gap: 8px; font-size: .85rem; color: var(--text-secondary); font-weight: 500; }
-.actionForm input[type="text"],
-.actionForm select {
+  transition: all .15s;
+  text-align: left;
   width: 100%;
-  padding: 12px 16px;
+}
+.actionRow:hover { background: var(--bg-raised); color: var(--text-primary); }
+
+.actionRow.isSelected {
+  background: var(--bg-raised);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+/* Risk dot */
+.actionRowDot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+  transition: background .15s;
+}
+.actionRow.risk-safe  .actionRowDot { background: var(--color-success); }
+.actionRow.risk-warn  .actionRowDot { background: var(--color-warn); }
+.actionRow.risk-danger .actionRowDot { background: var(--color-danger); }
+
+.actionRowContent { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.actionRowContent strong { font-size: .85rem; font-weight: 600; }
+.actionRowContent span   { font-size: .73rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.actionRowArrow { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
+
+/* ── Confirm Box ───────────────────────────────── */
+.actionConfirmBox {
+  margin: 0;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+}
+.actionConfirmBox.risk-danger {
+  background: linear-gradient(180deg, rgba(248,113,113,0.04) 0%, transparent 100%);
+}
+
+.actionConfirmHeader { display: grid; gap: 6px; }
+.actionConfirmHeader strong { font-size: .95rem; font-weight: 700; }
+.actionConfirmHeader p { font-size: .82rem; color: var(--text-muted); margin: 0; }
+
+.actionRiskBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  width: fit-content;
+}
+.actionRiskBadge.risk-safe   { background: rgba(52,211,153,.12); color: var(--color-success); border: 1px solid rgba(52,211,153,.25); }
+.actionRiskBadge.risk-warn   { background: rgba(251,191,36,.12); color: var(--color-warn);    border: 1px solid rgba(251,191,36,.25); }
+.actionRiskBadge.risk-danger { background: rgba(248,113,113,.12); color: var(--color-danger); border: 1px solid rgba(248,113,113,.25); }
+
+.confirmCode {
+  font-family: var(--font-mono);
+  font-size: .82rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.actionForm label.inputLabel,
+.actionConfirmBox label.inputLabel {
+  display: grid;
+  gap: 8px;
+  font-size: .82rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.actionConfirmBox input[type="text"],
+.actionConfirmBox select {
+  width: 100%;
+  padding: 10px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(0,0,0,.3);
   color: var(--text-primary);
   font: inherit;
-  font-size: .9rem;
+  font-size: .88rem;
   transition: all .2s;
 }
-.actionForm input:focus,
-.actionForm select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
-.actionForm > button {
-  padding: 14px 24px;
+.actionConfirmBox input:focus,
+.actionConfirmBox select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+/* Submit button — morphs based on risk */
+.actionSubmitBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 20px;
   border-radius: var(--radius-sm);
   border: 0;
+  font-weight: 700;
+  font-size: .88rem;
+  cursor: pointer;
+  transition: all .2s;
+  width: 100%;
+}
+.actionSubmitBtn.risk-safe,
+.actionSubmitBtn.risk-warn  {
   background: var(--accent);
   color: #03111a;
-  font-weight: 700;
-  font-size: .95rem;
-  transition: all .2s;
-  cursor: pointer;
   box-shadow: 0 4px 12px rgba(45,212,191,0.2);
 }
-.actionForm > button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(45,212,191,0.3); background: #34eed6; }
-.actionForm > button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; filter: grayscale(1); }
-.formMessage { font-size: .85rem; color: var(--color-success); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.actionSubmitBtn.risk-safe:hover:not(:disabled),
+.actionSubmitBtn.risk-warn:hover:not(:disabled) {
+  background: #34eed6;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(45,212,191,0.3);
+}
+.actionSubmitBtn.risk-danger {
+  background: var(--color-danger);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(248,113,113,0.2);
+}
+.actionSubmitBtn.risk-danger:hover:not(:disabled) {
+  background: #f87171;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(248,113,113,0.35);
+}
+.actionSubmitBtn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  filter: grayscale(0.5);
+}
+
+.formMessage { font-size: .82rem; color: var(--color-success); font-weight: 500; display: flex; align-items: center; gap: 6px; margin: 0; }
+
+
 
 /* ── Command list ──────────────────────────────── */
-.commandList { display: grid; gap: 12px; }
+.commandList { display: grid; gap: 8px; }
+
+.commandEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: .82rem;
+}
+
 .commandItem {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px 20px;
+  gap: 14px;
+  padding: 14px 16px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg-raised);
   font-size: .85rem;
-  transition: background 0.2s;
+  transition: background 0.15s;
 }
 .commandItem:hover { background: var(--bg-hover); }
-.commandItem div   { display: grid; gap: 4px; }
-.commandItem strong { font-size: .95rem; font-weight: 600; }
-.commandItem small  { color: var(--text-muted); font-size: .78rem; }
+
+.commandItemLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.commandDot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+  background: var(--text-muted);
+}
+.commandDot.status-succeeded { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
+.commandDot.status-failed    { background: var(--color-danger); }
+.commandDot.status-timedOut  { background: var(--color-danger); }
+.commandDot.status-pending   { background: var(--color-warn); }
+.commandDot.status-running   { background: var(--accent); animation: pulse 1.5s infinite; }
+
+.commandItemLeft div { display: grid; gap: 3px; min-width: 0; }
+.commandItem strong { font-size: .88rem; font-weight: 600; }
+.commandItem small  { color: var(--text-muted); font-size: .75rem; display: block; }
+.commandSummary { color: var(--text-secondary) !important; font-style: italic; }
+
 
 /* ── Deployments (Vercel/GitHub inspired) ──────── */
 .deploymentGrid {

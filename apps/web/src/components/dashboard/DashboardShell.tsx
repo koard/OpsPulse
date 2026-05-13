@@ -16,6 +16,7 @@ import {
   Globe2,
   HardDrive,
   Network,
+  ChevronRight,
   RefreshCcw,
   Search,
   Server,
@@ -846,16 +847,41 @@ function AgentInventory({ agents }: { agents: AgentStatus[] }) {
 }
 
 const commandActions = [
-  { value: "health_check_now", label: "Health Check Now", confirmation: "project" },
-  { value: "pm2_restart_process", label: "Restart PM2 Process", confirmation: "target" },
-  { value: "redeploy_backend", label: "Redeploy Backend", confirmation: "project" },
-  { value: "redeploy_frontend", label: "Redeploy Frontend", confirmation: "project" },
-  { value: "redeploy_admin", label: "Redeploy Admin", confirmation: "project" },
-  { value: "prisma_migrate_deploy", label: "Run Prisma Migrate Deploy", confirmation: "project" },
-  { value: "rollback_backend", label: "Rollback Backend", confirmation: "project" },
-  { value: "rollback_frontend", label: "Rollback Frontend", confirmation: "project" },
-  { value: "rollback_admin", label: "Rollback Admin", confirmation: "project" },
+  {
+    group: "Monitoring",
+    items: [
+      { value: "health_check_now", label: "Health Check", description: "Run a full health check on all services", confirmation: "project", risk: "safe" },
+    ],
+  },
+  {
+    group: "Process",
+    items: [
+      { value: "pm2_restart_process", label: "Restart PM2 Process", description: "Restart a specific PM2 process", confirmation: "target", risk: "warn" },
+    ],
+  },
+  {
+    group: "Deploy",
+    items: [
+      { value: "redeploy_backend",  label: "Redeploy Backend",  description: "Pull latest & restart backend service",  confirmation: "project", risk: "warn" },
+      { value: "redeploy_frontend", label: "Redeploy Frontend", description: "Pull latest & rebuild frontend assets",  confirmation: "project", risk: "warn" },
+      { value: "redeploy_admin",    label: "Redeploy Admin",    description: "Pull latest & restart admin service",    confirmation: "project", risk: "warn" },
+      { value: "prisma_migrate_deploy", label: "Prisma Migrate", description: "Run pending database migrations",      confirmation: "project", risk: "danger" },
+    ],
+  },
+  {
+    group: "Rollback",
+    items: [
+      { value: "rollback_backend",  label: "Rollback Backend",  description: "Revert backend to previous deployment",  confirmation: "project", risk: "danger" },
+      { value: "rollback_frontend", label: "Rollback Frontend", description: "Revert frontend to previous deployment", confirmation: "project", risk: "danger" },
+      { value: "rollback_admin",    label: "Rollback Admin",    description: "Revert admin to previous deployment",    confirmation: "project", risk: "danger" },
+    ],
+  },
 ] as const;
+
+type ActionValue = typeof commandActions[number]["items"][number]["value"];
+type ActionItem  = typeof commandActions[number]["items"][number];
+
+const allActions: ActionItem[] = commandActions.flatMap((g) => g.items as unknown as ActionItem[]);
 
 const processTargets = [
   "dukefarm-backend",
@@ -885,11 +911,11 @@ function ActionsView({
   projectId: string;
   onCommandCreated: (command: OpsCommand) => void;
 }) {
-  const [action, setAction] = useState<(typeof commandActions)[number]["value"]>("health_check_now");
+  const [action, setAction] = useState<ActionValue>("health_check_now");
   const [target, setTarget] = useState(processTargets[0]);
   const [confirmation, setConfirmation] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const selectedAction = commandActions.find((item) => item.value === action) ?? commandActions[0];
+  const selectedAction = allActions.find((item) => item.value === action) ?? allActions[0];
   const expectedConfirmation = selectedAction.confirmation === "target" ? target : projectId;
   const canSubmit = confirmation === expectedConfirmation;
 
@@ -921,76 +947,131 @@ function ActionsView({
 
   return (
     <section className="workGrid">
-      <div className="panel">
+      {/* ── Left: Control Plane ── */}
+      <div className="panel actionsPanel">
         <div className="panelHeader">
           <div>
             <span className="sectionLabel">Control plane</span>
-            <h2>DukeFarm safe actions</h2>
+            <h2>Safe operations</h2>
           </div>
           <TerminalSquare aria-hidden="true" className="panelIcon" />
         </div>
-        <div className="actionForm">
-          <div className="actionSelector">
-            {commandActions.map((item) => (
-              <label key={item.value} className="actionOption">
-                <input
-                  type="radio"
-                  name="action"
-                  value={item.value}
-                  checked={action === item.value}
-                  onChange={(event) => setAction(event.target.value as typeof action)}
-                />
-                <strong>{item.label}</strong>
-                <span>{item.confirmation === "project" ? "Whole project" : "Specific process"}</span>
-              </label>
-            ))}
+
+        {/* Action category list */}
+        <div className="actionCategoryList">
+          {commandActions.map((group) => (
+            <div key={group.group} className="actionGroup">
+              <span className="actionGroupLabel">{group.group}</span>
+              <div className="actionGroupItems">
+                {group.items.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={`actionRow ${
+                      action === item.value ? "isSelected" : ""
+                    } risk-${item.risk}`}
+                    onClick={() => {
+                      setAction(item.value as ActionValue);
+                      setConfirmation("");
+                      setMessage(null);
+                    }}
+                  >
+                    <span className="actionRowDot" />
+                    <span className="actionRowContent">
+                      <strong>{item.label}</strong>
+                      <span>{item.description}</span>
+                    </span>
+                    {action === item.value && (
+                      <ChevronRight aria-hidden="true" className="actionRowArrow" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Selected action detail + confirm */}
+        <div className={`actionConfirmBox risk-${selectedAction.risk}`}>
+          <div className="actionConfirmHeader">
+            <span className={`actionRiskBadge risk-${selectedAction.risk}`}>
+              {selectedAction.risk === "safe" ? "Safe" :
+               selectedAction.risk === "warn" ? "Caution" : "Destructive"}
+            </span>
+            <strong>{selectedAction.label}</strong>
+            <p>{selectedAction.description}</p>
           </div>
+
           {action === "pm2_restart_process" && (
             <label className="inputLabel">
-              <span>PM2 process</span>
-              <select value={target} onChange={(event) => setTarget(event.target.value)}>
-                {processTargets.map((process) => (
-                  <option key={process} value={process}>
-                    {process}
-                  </option>
+              <span>Target process</span>
+              <select value={target} onChange={(e) => setTarget(e.target.value)}>
+                {processTargets.map((p) => (
+                  <option key={p} value={p}>{p}</option>
                 ))}
               </select>
             </label>
           )}
+
           <label className="inputLabel">
-            <span>Type '{expectedConfirmation}' to confirm</span>
+            <span>
+              Type <code className="confirmCode">{expectedConfirmation}</code> to confirm
+            </span>
             <input
               type="text"
               value={confirmation}
-              onChange={(event) => setConfirmation(event.target.value)}
+              onChange={(e) => setConfirmation(e.target.value)}
               placeholder={expectedConfirmation}
+              autoComplete="off"
             />
           </label>
-          <button disabled={!canSubmit} onClick={createCommand} type="button">
-            Queue action
+
+          <button
+            className={`actionSubmitBtn risk-${selectedAction.risk}`}
+            disabled={!canSubmit}
+            onClick={createCommand}
+            type="button"
+          >
+            <Activity aria-hidden="true" size={15} />
+            Queue {selectedAction.label}
           </button>
-          {message && <small className="formMessage"><CheckCircle2 aria-hidden="true" size={14}/> {message}</small>}
+
+          {message && (
+            <p className="formMessage">
+              <CheckCircle2 aria-hidden="true" size={14} /> {message}
+            </p>
+          )}
         </div>
       </div>
 
+      {/* ── Right: Audit Log ── */}
       <div className="panel">
         <div className="panelHeader">
           <div>
-            <span className="sectionLabel">Deployment history</span>
-            <h2>Command audit trail</h2>
+            <span className="sectionLabel">Audit log</span>
+            <h2>Command history</h2>
           </div>
           <GitBranch aria-hidden="true" className="panelIcon" />
         </div>
         <div className="commandList">
           {commands.length === 0 ? (
-            <small>No commands queued yet</small>
+            <div className="commandEmpty">
+              <TerminalSquare size={24} opacity={0.3} />
+              <span>No commands queued yet</span>
+            </div>
           ) : (
             commands.map((command) => (
               <article className="commandItem" key={command.id}>
-                <div>
-                  <strong>{commandActionLabel[command.action] ?? command.action}</strong>
-                  <small>{command.target} · requested by {command.requestedBy}</small>
-                  {command.summary && <small>{command.summary}</small>}
+                <div className="commandItemLeft">
+                  <span className={`commandDot status-${command.status}`} />
+                  <div>
+                    <strong>{commandActionLabel[command.action] ?? command.action}</strong>
+                    <small>
+                      {command.target && <span>{command.target} · </span>}
+                      by {command.requestedBy}
+                    </small>
+                    {command.summary && <small className="commandSummary">{command.summary}</small>}
+                  </div>
                 </div>
                 <span className={`statusPill ${commandStatusClass(command.status)}`}>
                   {command.status}
