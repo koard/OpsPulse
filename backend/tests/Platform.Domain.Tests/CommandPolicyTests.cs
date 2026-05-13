@@ -8,7 +8,7 @@ public sealed class CommandPolicyTests
     public void CreateCommand_RejectsUnknownProcessRestartTarget()
     {
         var result = CommandPolicy.CreateCommand(
-            projectId: "dukefarm-production",
+            projectId: "dukefarm",
             action: "pm2_restart_process",
             target: "database",
             requestedBy: "portfolio-user",
@@ -25,7 +25,7 @@ public sealed class CommandPolicyTests
     public void CreateCommand_RequiresConfirmationForDangerousAction()
     {
         var result = CommandPolicy.CreateCommand(
-            projectId: "dukefarm-production",
+            projectId: "dukefarm",
             action: "redeploy_backend",
             target: null,
             requestedBy: "portfolio-user",
@@ -34,18 +34,18 @@ public sealed class CommandPolicyTests
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z"));
 
         Assert.False(result.IsAccepted);
-        Assert.Equal("Confirmation must match 'dukefarm-production'.", result.Error);
+        Assert.Equal("Confirmation must match 'dukefarm'.", result.Error);
     }
 
     [Fact]
     public void CreateCommand_CreatesPendingRedeployCommand()
     {
         var result = CommandPolicy.CreateCommand(
-            projectId: "dukefarm-production",
+            projectId: "dukefarm",
             action: "redeploy_backend",
             target: null,
             requestedBy: "portfolio-user",
-            confirmation: "dukefarm-production",
+            confirmation: "dukefarm",
             history: [],
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z"));
 
@@ -65,11 +65,11 @@ public sealed class CommandPolicyTests
         string expectedTarget)
     {
         var result = CommandPolicy.CreateCommand(
-            projectId: "dukefarm-production",
+            projectId: "dukefarm",
             action: action,
             target: null,
             requestedBy: "portfolio-user",
-            confirmation: "dukefarm-production",
+            confirmation: "dukefarm",
             history: [],
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z"));
 
@@ -86,11 +86,11 @@ public sealed class CommandPolicyTests
         var newer = SeedCommand("new", DateTimeOffset.Parse("2026-05-12T10:00:00Z"), "def222");
 
         var result = CommandPolicy.CreateCommand(
-            projectId: "dukefarm-production",
+            projectId: "dukefarm",
             action: "rollback_backend",
             target: null,
             requestedBy: "portfolio-user",
-            confirmation: "dukefarm-production",
+            confirmation: "dukefarm",
             history: [older, newer],
             requestedAt: DateTimeOffset.Parse("2026-05-12T11:00:00Z"));
 
@@ -112,11 +112,11 @@ public sealed class CommandPolicyTests
             "dukefarm-frontend");
 
         var result = CommandPolicy.CreateCommand(
-            projectId: "dukefarm-production",
+            projectId: "dukefarm",
             action: "rollback_frontend",
             target: null,
             requestedBy: "portfolio-user",
-            confirmation: "dukefarm-production",
+            confirmation: "dukefarm",
             history: [backend, frontend],
             requestedAt: DateTimeOffset.Parse("2026-05-12T11:00:00Z"));
 
@@ -130,11 +130,11 @@ public sealed class CommandPolicyTests
     public void CompleteCommand_TruncatesOutputAndSetsTerminalState()
     {
         var command = CommandPolicy.CreateCommand(
-            projectId: "dukefarm-production",
+            projectId: "dukefarm",
             action: "health_check_now",
             target: null,
             requestedBy: "portfolio-user",
-            confirmation: "dukefarm-production",
+            confirmation: "dukefarm",
             history: [],
             requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z")).Command!;
         var claimed = CommandPolicy.Claim(command, DateTimeOffset.Parse("2026-05-12T10:00:05Z"));
@@ -163,7 +163,7 @@ public sealed class CommandPolicyTests
     {
         return new OpsCommand(
             Id: id,
-            ProjectId: "dukefarm-production",
+            ProjectId: "dukefarm",
             Action: action,
             Target: target,
             Status: OpsCommandStatus.Succeeded,

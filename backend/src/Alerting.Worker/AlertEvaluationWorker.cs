@@ -23,7 +23,7 @@ public sealed class AlertEvaluationWorker(
     private async Task EvaluateOnce(CancellationToken stoppingToken)
     {
         var telemetryUrl = configuration["Services:Telemetry"] ?? "http://localhost:5082";
-        var projectId = configuration["Alerting:ProjectId"] ?? "dukefarm-production";
+        var projectId = configuration["Alerting:ProjectId"] ?? "dukefarm";
         var http = httpClientFactory.CreateClient();
 
         try

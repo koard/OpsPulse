@@ -43,8 +43,13 @@ services:
     environment:
       ASPNETCORE_URLS: http://+:8080
       DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      AgentTokens__dukefarm-production: ${DUKEFARM_AGENT_TOKEN}
       AgentTokens__dukefarm: ${DUKEFARM_AGENT_TOKEN}
+      MONITORED_PROJECT_ID: ${MONITORED_PROJECT_ID:-dukefarm}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      DUKEFARM_BACKEND_REPO: ${DUKEFARM_BACKEND_REPO:-koard/DukeFarm-Backend}
+      DUKEFARM_FRONTEND_REPO: ${DUKEFARM_FRONTEND_REPO:-koard/DukeFarm-Frontend}
+      DUKEFARM_ADMIN_REPO: ${DUKEFARM_ADMIN_REPO:-koard/DukeFarm-Admin}
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,7 +70,7 @@ services:
     restart: unless-stopped
     environment:
       Services__Telemetry: http://telemetry:8080
-      Alerting__ProjectId: ${MONITORED_PROJECT_ID:-dukefarm-production}
+      Alerting__ProjectId: ${MONITORED_PROJECT_ID:-dukefarm}
       Alerting__IntervalSeconds: 30
     depends_on:
       - telemetry

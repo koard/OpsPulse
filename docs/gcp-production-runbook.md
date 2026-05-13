@@ -48,10 +48,31 @@ docker build -t opspulse-web:latest apps/web
 docker compose --env-file .env -f docker-compose.prod.yml up -d
 ```
 
-If you change the agent `PROJECT_ID`, set the same value in `MONITORED_PROJECT_ID`.
-The production compose file accepts both `dukefarm-production` and `dukefarm`
-agent tokens by default, but command history and alert checks are cleaner when
-the IDs match.
+Keep the agent `PROJECT_ID` and GCP `MONITORED_PROJECT_ID` aligned. The default
+project id is `dukefarm`.
+
+For GitHub deployments, also set:
+
+```bash
+GITHUB_TOKEN=<github-token-with-repo-read-access>
+GITHUB_WEBHOOK_SECRET=<long-random-secret>
+DUKEFARM_BACKEND_REPO=koard/DukeFarm-Backend
+DUKEFARM_FRONTEND_REPO=koard/DukeFarm-Frontend
+DUKEFARM_ADMIN_REPO=koard/DukeFarm-Admin
+```
+
+Create a GitHub webhook in each DukeFarm repo:
+
+```text
+Payload URL: https://$OPSPULSE_DOMAIN/github/webhook
+Content type: application/json
+Secret: same value as GITHUB_WEBHOOK_SECRET
+Events: Push events only
+```
+
+Default repository settings start with auto deploy enabled for `main`. Disable
+per service from the OpsPulse Deployments tab before adding webhooks if you only
+want commit history at first.
 
 ## 4. Smoke checks
 
@@ -59,7 +80,7 @@ the IDs match.
 docker compose --env-file .env -f docker-compose.prod.yml ps
 curl https://$OPSPULSE_DOMAIN
 curl https://$OPSPULSE_DOMAIN/api/dashboard
-curl https://$OPSPULSE_DOMAIN/api/commands?projectId=dukefarm-production
+curl https://$OPSPULSE_DOMAIN/api/commands?projectId=dukefarm
 ```
 
 ## 5. Backup
@@ -90,7 +111,7 @@ Create a low-risk command from the dashboard first:
 - Open `https://$OPSPULSE_DOMAIN`.
 - Go to `Actions`.
 - Select `Health Check Now`.
-- Type `dukefarm-production` to confirm.
+- Type `dukefarm` to confirm.
 - Queue the action.
 
 The DukeFarm agent should claim it within `OPSPULSE_COMMAND_POLL_MS`, run endpoint checks, and write the result back to the deployment history. Use redeploy, migrate, rollback, and PM2 restart only after the health-check command works.

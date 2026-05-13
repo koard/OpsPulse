@@ -43,6 +43,27 @@ public interface ITelemetryStore
         string? releaseCommit,
         DateTimeOffset finishedAt,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<GitRepository>> GetRepositoriesAsync(CancellationToken cancellationToken);
+
+    Task<GitRepository?> GetRepositoryAsync(string id, CancellationToken cancellationToken);
+
+    Task<GitRepository?> GetRepositoryByFullNameAsync(string fullName, CancellationToken cancellationToken);
+
+    Task<GitRepository> UpsertRepositoryAsync(
+        GitRepository repository,
+        bool preserveSettings,
+        CancellationToken cancellationToken);
+
+    Task<GitRepository?> UpdateRepositorySettingsAsync(
+        string id,
+        bool autoDeployEnabled,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken);
+
+    Task UpsertCommitsAsync(string repositoryId, IReadOnlyList<GitCommit> commits, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<GitCommit>> GetCommitsAsync(string repositoryId, int limit, CancellationToken cancellationToken);
 }
 
 public static class TelemetryJson
@@ -58,6 +79,8 @@ public sealed class InMemoryTelemetryStore : ITelemetryStore
     private readonly ConcurrentDictionary<string, List<ProjectSnapshot>> snapshots = new();
     private readonly ConcurrentDictionary<string, Incident> incidents = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, OpsCommand> commands = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, GitRepository> repositories = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, GitCommit>> commits = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentBag<CommandAuditEntry> commandAudit = [];
 
     public Task SaveSnapshotAsync(ProjectSnapshot snapshot, IReadOnlyList<Incident> updatedIncidents, CancellationToken cancellationToken)
@@ -256,6 +279,83 @@ public sealed class InMemoryTelemetryStore : ITelemetryStore
             CreatedAt: DateTimeOffset.UtcNow,
             Message: message));
     }
+
+    public Task<IReadOnlyList<GitRepository>> GetRepositoriesAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<GitRepository>>(
+            repositories.Values.OrderBy(repository => repository.Id).ToList());
+    }
+
+    public Task<GitRepository?> GetRepositoryAsync(string id, CancellationToken cancellationToken)
+    {
+        repositories.TryGetValue(id, out var repository);
+        return Task.FromResult(repository);
+    }
+
+    public Task<GitRepository?> GetRepositoryByFullNameAsync(string fullName, CancellationToken cancellationToken)
+    {
+        var repository = repositories.Values.FirstOrDefault(candidate =>
+            string.Equals(candidate.FullName, fullName, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(repository);
+    }
+
+    public Task<GitRepository> UpsertRepositoryAsync(
+        GitRepository repository,
+        bool preserveSettings,
+        CancellationToken cancellationToken)
+    {
+        repositories.AddOrUpdate(
+            repository.Id,
+            repository,
+            (_, existing) => preserveSettings
+                ? repository with { AutoDeployEnabled = existing.AutoDeployEnabled }
+                : repository);
+
+        return Task.FromResult(repositories[repository.Id]);
+    }
+
+    public Task<GitRepository?> UpdateRepositorySettingsAsync(
+        string id,
+        bool autoDeployEnabled,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken)
+    {
+        if (!repositories.TryGetValue(id, out var repository))
+        {
+            return Task.FromResult<GitRepository?>(null);
+        }
+
+        var updated = repository with { AutoDeployEnabled = autoDeployEnabled, UpdatedAt = updatedAt };
+        repositories[id] = updated;
+        return Task.FromResult<GitRepository?>(updated);
+    }
+
+    public Task UpsertCommitsAsync(string repositoryId, IReadOnlyList<GitCommit> newCommits, CancellationToken cancellationToken)
+    {
+        var repositoryCommits = commits.GetOrAdd(
+            repositoryId,
+            _ => new ConcurrentDictionary<string, GitCommit>(StringComparer.OrdinalIgnoreCase));
+        foreach (var commit in newCommits)
+        {
+            repositoryCommits[commit.Sha] = commit;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<GitCommit>> GetCommitsAsync(string repositoryId, int limit, CancellationToken cancellationToken)
+    {
+        if (!commits.TryGetValue(repositoryId, out var repositoryCommits))
+        {
+            return Task.FromResult<IReadOnlyList<GitCommit>>([]);
+        }
+
+        return Task.FromResult<IReadOnlyList<GitCommit>>(
+            repositoryCommits.Values
+                .OrderByDescending(commit => commit.CommittedAt)
+                .Take(Math.Max(1, limit))
+                .ToList());
+    }
 }
 
 public sealed class PostgresTelemetryStore(string connectionString) : ITelemetryStore
@@ -305,6 +405,26 @@ public sealed class PostgresTelemetryStore(string connectionString) : ITelemetry
                 event text not null,
                 created_at timestamptz not null,
                 message text not null
+            );
+
+            create table if not exists git_repositories (
+                id text primary key,
+                service text not null,
+                full_name text not null unique,
+                branch text not null,
+                project_id text not null,
+                deploy_action text not null,
+                auto_deploy_enabled boolean not null,
+                updated_at timestamptz not null,
+                payload jsonb not null
+            );
+
+            create table if not exists git_commits (
+                repository_id text not null,
+                sha text not null,
+                committed_at timestamptz not null,
+                payload jsonb not null,
+                primary key (repository_id, sha)
             );
             """;
 
@@ -673,5 +793,160 @@ public sealed class PostgresTelemetryStore(string connectionString) : ITelemetry
         insert.Parameters.AddWithValue("created_at", DateTimeOffset.UtcNow);
         insert.Parameters.AddWithValue("message", message);
         await insert.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<GitRepository>> GetRepositoriesAsync(CancellationToken cancellationToken)
+    {
+        var results = new List<GitRepository>();
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("select payload from git_repositories order by id;", connection);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var repository = JsonSerializer.Deserialize<GitRepository>(reader.GetString(0), TelemetryJson.Options);
+            if (repository is not null)
+            {
+                results.Add(repository);
+            }
+        }
+
+        return results;
+    }
+
+    public async Task<GitRepository?> GetRepositoryAsync(string id, CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("select payload from git_repositories where id = @id;", connection);
+        command.Parameters.AddWithValue("id", id);
+        var payload = await command.ExecuteScalarAsync(cancellationToken) as string;
+        return payload is null ? null : JsonSerializer.Deserialize<GitRepository>(payload, TelemetryJson.Options);
+    }
+
+    public async Task<GitRepository?> GetRepositoryByFullNameAsync(string fullName, CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("select payload from git_repositories where lower(full_name) = lower(@full_name);", connection);
+        command.Parameters.AddWithValue("full_name", fullName);
+        var payload = await command.ExecuteScalarAsync(cancellationToken) as string;
+        return payload is null ? null : JsonSerializer.Deserialize<GitRepository>(payload, TelemetryJson.Options);
+    }
+
+    public async Task<GitRepository> UpsertRepositoryAsync(
+        GitRepository repository,
+        bool preserveSettings,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            insert into git_repositories (id, service, full_name, branch, project_id, deploy_action, auto_deploy_enabled, updated_at, payload)
+            values (@id, @service, @full_name, @branch, @project_id, @deploy_action, @auto_deploy_enabled, @updated_at, @payload::jsonb)
+            on conflict (id) do update
+            set service = excluded.service,
+                full_name = excluded.full_name,
+                branch = excluded.branch,
+                project_id = excluded.project_id,
+                deploy_action = excluded.deploy_action,
+                auto_deploy_enabled = case when @preserve_settings then git_repositories.auto_deploy_enabled else excluded.auto_deploy_enabled end,
+                updated_at = excluded.updated_at,
+                payload = jsonb_set(
+                    excluded.payload,
+                    '{autoDeployEnabled}',
+                    to_jsonb(case when @preserve_settings then git_repositories.auto_deploy_enabled else excluded.auto_deploy_enabled end));
+            """, connection);
+        AddRepositoryParameters(command, repository);
+        command.Parameters.AddWithValue("preserve_settings", preserveSettings);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return await GetRepositoryAsync(repository.Id, cancellationToken) ?? repository;
+    }
+
+    public async Task<GitRepository?> UpdateRepositorySettingsAsync(
+        string id,
+        bool autoDeployEnabled,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken)
+    {
+        var repository = await GetRepositoryAsync(id, cancellationToken);
+        if (repository is null)
+        {
+            return null;
+        }
+
+        var updated = repository with
+        {
+            AutoDeployEnabled = autoDeployEnabled,
+            UpdatedAt = updatedAt
+        };
+        await UpsertRepositoryAsync(updated, preserveSettings: false, cancellationToken);
+        return updated;
+    }
+
+    public async Task UpsertCommitsAsync(string repositoryId, IReadOnlyList<GitCommit> commits, CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        foreach (var commit in commits)
+        {
+            await using var command = new NpgsqlCommand("""
+                insert into git_commits (repository_id, sha, committed_at, payload)
+                values (@repository_id, @sha, @committed_at, @payload::jsonb)
+                on conflict (repository_id, sha) do update
+                set committed_at = excluded.committed_at,
+                    payload = excluded.payload;
+                """, connection, transaction);
+            command.Parameters.AddWithValue("repository_id", repositoryId);
+            command.Parameters.AddWithValue("sha", commit.Sha);
+            command.Parameters.AddWithValue("committed_at", commit.CommittedAt);
+            command.Parameters.AddWithValue("payload", JsonSerializer.Serialize(commit, TelemetryJson.Options));
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<GitCommit>> GetCommitsAsync(string repositoryId, int limit, CancellationToken cancellationToken)
+    {
+        var results = new List<GitCommit>();
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select payload from git_commits
+            where repository_id = @repository_id
+            order by committed_at desc
+            limit @limit;
+            """, connection);
+        command.Parameters.AddWithValue("repository_id", repositoryId);
+        command.Parameters.AddWithValue("limit", Math.Max(1, limit));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var commit = JsonSerializer.Deserialize<GitCommit>(reader.GetString(0), TelemetryJson.Options);
+            if (commit is not null)
+            {
+                results.Add(commit);
+            }
+        }
+
+        return results;
+    }
+
+    private static void AddRepositoryParameters(NpgsqlCommand command, GitRepository repository)
+    {
+        command.Parameters.AddWithValue("id", repository.Id);
+        command.Parameters.AddWithValue("service", repository.Service.ToString());
+        command.Parameters.AddWithValue("full_name", repository.FullName);
+        command.Parameters.AddWithValue("branch", repository.Branch);
+        command.Parameters.AddWithValue("project_id", repository.ProjectId);
+        command.Parameters.AddWithValue("deploy_action", repository.DeployAction.ToString());
+        command.Parameters.AddWithValue("auto_deploy_enabled", repository.AutoDeployEnabled);
+        command.Parameters.AddWithValue("updated_at", repository.UpdatedAt);
+        command.Parameters.AddWithValue("payload", JsonSerializer.Serialize(repository, TelemetryJson.Options));
     }
 }

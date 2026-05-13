@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process";
-import { hostname, platform, release } from "node:os";
+import { hostname } from "node:os";
 import { promisify } from "node:util";
 import { claimAndExecuteCommand } from "./commands.js";
+import { getOsName } from "./system.js";
 
 const execFileAsync = promisify(execFile);
 
 const config = {
-  projectId: process.env.PROJECT_ID ?? "dukefarm-production",
+  projectId: process.env.PROJECT_ID ?? "dukefarm",
   ingestUrl: process.env.OPSPULSE_INGEST_URL,
   token: process.env.OPSPULSE_AGENT_TOKEN,
   intervalMs: Number(process.env.OPSPULSE_INTERVAL_MS ?? 60000),
@@ -61,11 +62,12 @@ async function pollCommands() {
 }
 
 async function collectAndSend() {
-  const [processes, metrics, endpoints, pm2Version] = await Promise.all([
+  const [processes, metrics, endpoints, pm2Version, osName] = await Promise.all([
     collectPm2Processes(),
     collectHostMetrics(),
     collectEndpoints(),
     getPm2Version(),
+    getOsName(),
   ]);
 
   const now = new Date().toISOString();
@@ -78,7 +80,7 @@ async function collectAndSend() {
     agent: {
       version: "1.0.0",
       hostname: hostname(),
-      os: `${platform()} ${release()}`,
+      os: osName,
       pm2Version,
       receivedAt: now,
     },
@@ -91,7 +93,7 @@ async function collectAndSend() {
       "X-Agent-Token": config.token,
       "X-Agent-Version": "1.0.0",
       "X-Agent-Hostname": hostname(),
-      "X-Agent-Os": `${platform()} ${release()}`,
+      "X-Agent-Os": osName,
       "X-Agent-Pm2-Version": pm2Version,
     },
     body: JSON.stringify(payload),

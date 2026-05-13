@@ -43,6 +43,7 @@ export function planCommandSteps(command, config) {
 function redeploySteps(profile, branch, includePrismaGenerate) {
   const steps = [
     { command: "git", args: ["fetch", "origin", branch], cwd: profile.dir },
+    { command: "git", args: ["status", "--porcelain"], cwd: profile.dir, assertCleanWorktree: true },
     { command: "git", args: ["reset", "--hard", `origin/${branch}`], cwd: profile.dir },
     { command: "git", args: ["rev-parse", "HEAD"], cwd: profile.dir, captureReleaseCommit: true },
     { command: "npm", args: ["ci"], cwd: profile.dir },
@@ -132,6 +133,9 @@ export async function executeOpsCommand(command, config, runner = runStep) {
       const result = await runner(step, config.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS);
       stdout += `$ ${step.command} ${step.args.join(" ")}\n${result.stdout}\n`;
       stderr += result.stderr ? `${result.stderr}\n` : "";
+      if (step.assertCleanWorktree && result.stdout.trim()) {
+        throw new WorktreeDirtyError(result.stdout.trim());
+      }
       if (step.captureReleaseCommit) {
         releaseCommit = result.stdout.trim().split(/\s+/)[0] ?? null;
       }
@@ -175,6 +179,13 @@ export async function executeOpsCommand(command, config, runner = runStep) {
       releaseCommit,
       durationMs: Date.now() - started,
     };
+  }
+}
+
+class WorktreeDirtyError extends Error {
+  constructor(statusOutput) {
+    super(`Worktree has local changes. Commit, stash, or remove these files before deploy:\n${statusOutput}`);
+    this.stdout = statusOutput;
   }
 }
 

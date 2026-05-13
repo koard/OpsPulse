@@ -31,7 +31,7 @@ services:
     environment:
       ASPNETCORE_URLS: http://+:8080
       DATABASE_URL: Host=postgres;Port=5432;Database=opspulse;Username=opspulse;Password=opspulse
-      AgentTokens__dukefarm-production: local-dev-token
+      AgentTokens__dukefarm: local-dev-token
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,7 +58,7 @@ services:
       dockerfile: src/Alerting.Worker/Dockerfile
     environment:
       Services__Telemetry: http://telemetry:8080
-      Alerting__ProjectId: dukefarm-production
+      Alerting__ProjectId: dukefarm
       Alerting__IntervalSeconds: 30
     depends_on:
       - telemetry

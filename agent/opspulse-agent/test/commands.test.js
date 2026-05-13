@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { planCommandSteps } from "../src/commands.js";
+import { executeOpsCommand, planCommandSteps } from "../src/commands.js";
 
 const baseConfig = {
-  projectId: "dukefarm-production",
+  projectId: "dukefarm",
   dukeFarmBaseUrl: "http://127.0.0.1:4000",
   dukeFarmBackendDir: "/srv/DukeFarm-Backend",
   dukeFarmFrontendDir: "/srv/DukeFarm-Frontend",
@@ -21,6 +21,7 @@ test("plans redeploy backend in production-safe order", () => {
     steps.map((step) => [step.command, step.args, step.cwd]),
     [
       ["git", ["fetch", "origin", "main"], "/srv/DukeFarm-Backend"],
+      ["git", ["status", "--porcelain"], "/srv/DukeFarm-Backend"],
       ["git", ["reset", "--hard", "origin/main"], "/srv/DukeFarm-Backend"],
       ["git", ["rev-parse", "HEAD"], "/srv/DukeFarm-Backend"],
       ["npm", ["ci"], "/srv/DukeFarm-Backend"],
@@ -41,6 +42,7 @@ test("plans redeploy frontend with frontend directory and PM2 target", () => {
     steps.map((step) => [step.command, step.args, step.cwd]),
     [
       ["git", ["fetch", "origin", "main"], "/srv/DukeFarm-Frontend"],
+      ["git", ["status", "--porcelain"], "/srv/DukeFarm-Frontend"],
       ["git", ["reset", "--hard", "origin/main"], "/srv/DukeFarm-Frontend"],
       ["git", ["rev-parse", "HEAD"], "/srv/DukeFarm-Frontend"],
       ["npm", ["ci"], "/srv/DukeFarm-Frontend"],
@@ -60,6 +62,7 @@ test("plans redeploy admin with admin directory and PM2 target", () => {
     steps.map((step) => [step.command, step.args, step.cwd]),
     [
       ["git", ["fetch", "origin", "main"], "/srv/DukeFarm-Admin"],
+      ["git", ["status", "--porcelain"], "/srv/DukeFarm-Admin"],
       ["git", ["reset", "--hard", "origin/main"], "/srv/DukeFarm-Admin"],
       ["git", ["rev-parse", "HEAD"], "/srv/DukeFarm-Admin"],
       ["npm", ["ci"], "/srv/DukeFarm-Admin"],
@@ -87,4 +90,22 @@ test("rejects unsupported arbitrary command action", () => {
     ),
     /Unsupported command action/,
   );
+});
+
+test("fails redeploy before reset when worktree has local changes", async () => {
+  const result = await executeOpsCommand(
+    { action: "redeployFrontend", target: "dukefarm-frontend" },
+    baseConfig,
+    async (step) => {
+      if (step.command === "git" && step.args.join(" ") === "status --porcelain") {
+        return { stdout: " M package.json\n", stderr: "" };
+      }
+
+      return { stdout: "", stderr: "" };
+    },
+  );
+
+  assert.equal(result.status, "failed");
+  assert.match(result.summary, /worktree has local changes/i);
+  assert.match(result.stdout, /package\.json/);
 });

@@ -129,7 +129,7 @@ public static class CommandPolicy
     {
         return action switch
         {
-            OpsCommandAction.HealthCheckNow => ("dukefarm-production", null),
+            OpsCommandAction.HealthCheckNow => ("dukefarm", null),
             OpsCommandAction.RedeployBackend => ("dukefarm-backend", null),
             OpsCommandAction.RedeployFrontend => ("dukefarm-frontend", null),
             OpsCommandAction.RedeployAdmin => ("dukefarm-admin", null),

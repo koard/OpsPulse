@@ -133,6 +133,39 @@ export type OpsCommand = {
   stdoutTail?: string | null;
   stderrTail?: string | null;
   releaseCommit?: string | null;
+  triggerSource?: string | null;
+  triggerRepositoryId?: string | null;
+  triggerCommitSha?: string | null;
+  triggerCommitMessage?: string | null;
+  triggerCommitUrl?: string | null;
+};
+
+export type GitRepository = {
+  id: string;
+  service: "backend" | "frontend" | "admin";
+  fullName: string;
+  branch: string;
+  projectId: string;
+  deployAction: OpsCommandAction;
+  autoDeployEnabled: boolean;
+  updatedAt: string;
+};
+
+export type GitCommit = {
+  repositoryId: string;
+  sha: string;
+  message: string;
+  authorName: string;
+  authorLogin: string;
+  url: string;
+  committedAt: string;
+};
+
+export type RepositoryDeploymentView = {
+  repository: GitRepository;
+  latestCommit?: GitCommit | null;
+  latestCommand?: OpsCommand | null;
+  recentCommits: GitCommit[];
 };
 
 export type CreateCommandInput = {
@@ -172,6 +205,7 @@ export type SrePayload = {
   incidents: Incident[];
   agents: AgentStatus[];
   commands: OpsCommand[];
+  repositories: RepositoryDeploymentView[];
   slo?: SloReport | null;
 };
 

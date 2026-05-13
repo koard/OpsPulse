@@ -52,6 +52,13 @@ public enum OpsCommandStatus
     Cancelled
 }
 
+public enum GitRepositoryService
+{
+    Backend,
+    Frontend,
+    Admin
+}
+
 public sealed record ServerProfile(
     string Hostname,
     string Os,
@@ -189,7 +196,76 @@ public sealed record OpsCommand(
     string? Summary = null,
     string? StdoutTail = null,
     string? StderrTail = null,
-    string? ReleaseCommit = null);
+    string? ReleaseCommit = null,
+    string? TriggerSource = null,
+    string? TriggerRepositoryId = null,
+    string? TriggerCommitSha = null,
+    string? TriggerCommitMessage = null,
+    string? TriggerCommitUrl = null);
+
+public sealed record GitRepository(
+    string Id,
+    GitRepositoryService Service,
+    string FullName,
+    string Branch,
+    string ProjectId,
+    OpsCommandAction DeployAction,
+    bool AutoDeployEnabled,
+    DateTimeOffset UpdatedAt)
+{
+    public static GitRepository CreateDefault(
+        string service,
+        string fullName,
+        string branch,
+        string projectId)
+    {
+        var parsedService = Enum.Parse<GitRepositoryService>(service, ignoreCase: true);
+        var action = parsedService switch
+        {
+            GitRepositoryService.Backend => OpsCommandAction.RedeployBackend,
+            GitRepositoryService.Frontend => OpsCommandAction.RedeployFrontend,
+            GitRepositoryService.Admin => OpsCommandAction.RedeployAdmin,
+            _ => throw new ArgumentOutOfRangeException(nameof(service), service, null)
+        };
+
+        return new GitRepository(
+            Id: parsedService.ToString().ToLowerInvariant(),
+            Service: parsedService,
+            FullName: fullName,
+            Branch: branch,
+            ProjectId: projectId,
+            DeployAction: action,
+            AutoDeployEnabled: true,
+            UpdatedAt: DateTimeOffset.UtcNow);
+    }
+}
+
+public sealed record GitCommit(
+    string RepositoryId,
+    string Sha,
+    string Message,
+    string AuthorName,
+    string AuthorLogin,
+    string Url,
+    DateTimeOffset CommittedAt);
+
+public sealed record GitHubPushEvent(
+    string RepositoryFullName,
+    string Ref,
+    string SenderLogin,
+    GitCommit? HeadCommit);
+
+public sealed record GitHubDeploymentDecision(
+    bool ShouldCreateCommand,
+    OpsCommandAction? Action,
+    string RequestedBy,
+    string Reason);
+
+public sealed record RepositoryDeploymentView(
+    GitRepository Repository,
+    GitCommit? LatestCommit,
+    OpsCommand? LatestCommand,
+    IReadOnlyList<GitCommit> RecentCommits);
 
 public sealed record CommandAuditEntry(
     string Id,

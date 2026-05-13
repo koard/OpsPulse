@@ -1,4 +1,12 @@
-import type { AgentStatus, DashboardPayload, Incident, OpsCommand, SloReport, SrePayload } from "./types";
+import type {
+  AgentStatus,
+  DashboardPayload,
+  Incident,
+  OpsCommand,
+  RepositoryDeploymentView,
+  SloReport,
+  SrePayload,
+} from "./types";
 
 const emptyDashboardPayload = (): DashboardPayload => ({
   generatedAt: new Date().toISOString(),
@@ -33,17 +41,18 @@ export async function getSrePayload(): Promise<SrePayload> {
   const apiBaseUrl = process.env.API_BASE_URL;
 
   if (!apiBaseUrl || !projectId) {
-    return { dashboard, incidents: [], agents: [], commands: [], slo: null };
+    return { dashboard, incidents: [], agents: [], commands: [], repositories: [], slo: null };
   }
 
-  const [incidents, agents, commands, slo] = await Promise.all([
+  const [incidents, agents, commands, repositories, slo] = await Promise.all([
     fetchJsonOrDefault<Incident[]>(`${apiBaseUrl}/api/incidents`, []),
     fetchJsonOrDefault<AgentStatus[]>(`${apiBaseUrl}/api/agents`, []),
     fetchJsonOrDefault<OpsCommand[]>(`${apiBaseUrl}/api/commands?projectId=${projectId}`, []),
+    fetchJsonOrDefault<RepositoryDeploymentView[]>(`${apiBaseUrl}/api/repositories`, []),
     fetchJsonOrDefault<SloReport | null>(`${apiBaseUrl}/api/slo/${projectId}`, null),
   ]);
 
-  return { dashboard, incidents, agents, commands, slo };
+  return { dashboard, incidents, agents, commands, repositories, slo };
 }
 
 async function fetchJsonOrDefault<T>(url: string, fallback: T): Promise<T> {

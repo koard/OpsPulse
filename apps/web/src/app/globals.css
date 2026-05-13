@@ -713,6 +713,98 @@ button {
   gap: 12px;
 }
 
+.deploymentGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.repositoryPanel {
+  display: grid;
+  gap: 16px;
+}
+
+.repoMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.repoMetaGrid span {
+  align-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #c8d3df;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.repoMetaGrid svg {
+  color: #93c5fd;
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
+.deploymentActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.deploymentActions button {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #dce5ee;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
+.deploymentActions button:hover {
+  border-color: rgba(45, 212, 191, 0.38);
+  color: #e8fff9;
+}
+
+.commitTimeline {
+  display: grid;
+  gap: 8px;
+}
+
+.commitItem {
+  align-items: center;
+  border-left: 2px solid rgba(45, 212, 191, 0.42);
+  color: #dce5ee;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 8px 0 8px 12px;
+  text-decoration: none;
+}
+
+.commitItem strong,
+.commitItem small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commitItem small,
+.commitTimeline small {
+  color: #93a4b7;
+}
+
+.commitItem svg {
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
 .commandItem {
   align-items: center;
   border: 1px solid rgba(148, 163, 184, 0.16);

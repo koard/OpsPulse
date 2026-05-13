@@ -24,7 +24,7 @@ chmod 600 .env
 Edit `.env`:
 
 ```bash
-PROJECT_ID=dukefarm-production
+PROJECT_ID=dukefarm
 OPSPULSE_INGEST_URL=https://ops.example.com/ingest/snapshots
 OPSPULSE_COMMANDS_URL=https://ops.example.com/agent/commands
 OPSPULSE_AGENT_TOKEN=<same token as GCP .env>
@@ -81,6 +81,10 @@ Supported actions:
 - `prisma_migrate_deploy` runs `npx prisma migrate deploy` as a separate explicit action.
 - `rollback_backend` resets to the latest successful redeploy commit recorded by OpsPulse, rebuilds, restarts, then health-checks.
 - `rollback_frontend` and `rollback_admin` reset to the latest successful redeploy commit for that same service, rebuild, restart, then health-check.
+
+Every redeploy checks `git status --porcelain` before `git reset --hard`.
+If local files were edited on the server, the command fails and shows the dirty
+file list instead of overwriting them.
 
 Before enabling redeploy/rollback, confirm:
 

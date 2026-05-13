@@ -115,6 +115,59 @@ app.MapGet("/api/commands", async Task<IResult> (string? projectId, IHttpClientF
     return Results.Ok(commands);
 });
 
+app.MapGet("/api/repositories", async (IHttpClientFactory httpClientFactory, IConfiguration configuration) =>
+{
+    var telemetryUrl = configuration["Services:Telemetry"] ?? "http://localhost:5082";
+    var repositories = await ReadJsonOrDefault(
+        httpClientFactory.CreateClient(),
+        $"{telemetryUrl}/repositories",
+        Array.Empty<RepositoryDeploymentView>());
+
+    return Results.Ok(repositories);
+});
+
+app.MapPatch("/api/repositories/{id}/settings", async Task<IResult> (
+    string id,
+    UpdateRepositorySettingsRequest request,
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration) =>
+{
+    var telemetryUrl = configuration["Services:Telemetry"] ?? "http://localhost:5082";
+    var response = await PatchJsonAsync(
+        httpClientFactory.CreateClient(),
+        $"{telemetryUrl}/repositories/{Uri.EscapeDataString(id)}/settings",
+        request);
+    var content = await response.Content.ReadAsStringAsync();
+    return Results.Content(content, "application/json", statusCode: (int)response.StatusCode);
+});
+
+app.MapGet("/api/repositories/{id}/commits", async Task<IResult> (
+    string id,
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration) =>
+{
+    var telemetryUrl = configuration["Services:Telemetry"] ?? "http://localhost:5082";
+    var commits = await ReadJsonOrDefault(
+        httpClientFactory.CreateClient(),
+        $"{telemetryUrl}/repositories/{Uri.EscapeDataString(id)}/commits",
+        Array.Empty<GitCommit>());
+
+    return Results.Ok(commits);
+});
+
+app.MapPost("/api/repositories/{id}/sync", async Task<IResult> (
+    string id,
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration) =>
+{
+    var telemetryUrl = configuration["Services:Telemetry"] ?? "http://localhost:5082";
+    var response = await httpClientFactory.CreateClient().PostAsync(
+        $"{telemetryUrl}/repositories/{Uri.EscapeDataString(id)}/sync",
+        content: null);
+    var content = await response.Content.ReadAsStringAsync();
+    return Results.Content(content, "application/json", statusCode: (int)response.StatusCode);
+});
+
 app.MapPost("/api/commands", async Task<IResult> (
     CreateCommandRequest request,
     IHttpClientFactory httpClientFactory,
@@ -128,6 +181,32 @@ app.MapPost("/api/commands", async Task<IResult> (
 
     var content = await response.Content.ReadAsStringAsync();
     return Results.Content(content, "application/json", statusCode: (int)response.StatusCode);
+});
+
+app.MapPost("/github/webhook", async Task<IResult> (
+    HttpRequest request,
+    IHttpClientFactory httpClientFactory,
+    IConfiguration configuration) =>
+{
+    var telemetryUrl = configuration["Services:Telemetry"] ?? "http://localhost:5082";
+    using var reader = new StreamReader(request.Body);
+    var body = await reader.ReadToEndAsync();
+    using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{telemetryUrl}/github/webhook")
+    {
+        Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+    };
+
+    foreach (var header in new[] { "X-GitHub-Event", "X-GitHub-Delivery", "X-Hub-Signature-256" })
+    {
+        if (request.Headers.TryGetValue(header, out var value))
+        {
+            httpRequest.Headers.TryAddWithoutValidation(header, value.ToArray());
+        }
+    }
+
+    var response = await httpClientFactory.CreateClient().SendAsync(httpRequest);
+    var content = await response.Content.ReadAsStringAsync();
+    return Results.Content(content, response.Content.Headers.ContentType?.ToString() ?? "application/json", statusCode: (int)response.StatusCode);
 });
 
 app.Run();
@@ -175,6 +254,18 @@ static async Task<HttpResponseMessage> PostJsonAsync<T>(HttpClient http, string 
     }
 }
 
+static async Task<HttpResponseMessage> PatchJsonAsync<T>(HttpClient http, string url, T payload)
+{
+    try
+    {
+        return await http.PatchAsJsonAsync(url, payload, GatewayJson.Options);
+    }
+    catch
+    {
+        return new HttpResponseMessage(System.Net.HttpStatusCode.BadGateway);
+    }
+}
+
 static DashboardProject ToDashboardProject(
     ProjectSnapshot snapshot,
     IReadOnlyList<ProjectSnapshot> history)
@@ -192,8 +283,8 @@ static DashboardProject ToDashboardProject(
 
     return new DashboardProject(
         Id: snapshot.ProjectId,
-        Name: ToDisplayName(snapshot.ProjectId),
-        Environment: ToEnvironment(snapshot.ProjectId),
+        Name: ProjectPresentation.ToDisplayName(snapshot.ProjectId),
+        Environment: ProjectPresentation.ToEnvironment(snapshot.ProjectId),
         Owner: "",
         Server: new ServerProfile(
             Hostname: snapshot.Agent?.Hostname ?? snapshot.ProjectId,
@@ -206,22 +297,6 @@ static DashboardProject ToDashboardProject(
         Metrics: snapshot.Metrics,
         Alerts: alerts,
         Timeline: timeline);
-}
-
-static string ToDisplayName(string projectId)
-{
-    return string.Join(
-        " ",
-        projectId
-            .Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries)
-            .Select(word => string.Concat(word[..1].ToUpperInvariant(), word[1..])));
-}
-
-static string ToEnvironment(string projectId)
-{
-    return projectId.Contains("prod", StringComparison.OrdinalIgnoreCase)
-        ? "Production"
-        : "Connected";
 }
 
 public sealed record DashboardPayload(
@@ -254,3 +329,5 @@ public sealed record CreateCommandRequest(
     string? Target,
     string RequestedBy,
     string Confirmation);
+
+public sealed record UpdateRepositorySettingsRequest(bool AutoDeployEnabled);

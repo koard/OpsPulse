@@ -33,6 +33,7 @@ describe("API payload fallbacks", () => {
       incidents: [],
       agents: [],
       commands: [],
+      repositories: [],
       slo: null,
     });
   });

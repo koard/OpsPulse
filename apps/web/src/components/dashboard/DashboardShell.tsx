@@ -42,6 +42,7 @@ import type {
   Incident,
   OpsCommand,
   ProcessMetric,
+  RepositoryDeploymentView,
   Severity,
   SloReport,
   SrePayload,
@@ -52,7 +53,7 @@ type DashboardShellProps = {
   payload: SrePayload;
 };
 
-type DashboardTab = "overview" | "incidents" | "slo" | "agents" | "actions" | "runbook";
+type DashboardTab = "overview" | "incidents" | "slo" | "agents" | "actions" | "deployments" | "runbook";
 
 const severityLabel: Record<Severity, string> = {
   healthy: "Healthy",
@@ -77,6 +78,7 @@ export function DashboardShell({ payload }: DashboardShellProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
   const [incidents, setIncidents] = useState(payload.incidents);
   const [commands, setCommands] = useState(payload.commands);
+  const [repositories, setRepositories] = useState(payload.repositories);
   const [selectedProjectId, setSelectedProjectId] = useState(
     dashboard.projects[0]?.id ?? "",
   );
@@ -211,6 +213,7 @@ export function DashboardShell({ payload }: DashboardShellProps) {
             ["slo", "SLO"],
             ["agents", "Agents"],
             ["actions", "Actions"],
+            ["deployments", "Deployments"],
             ["runbook", "Runbook"],
           ].map(([tab, label]) => (
             <button
@@ -393,6 +396,17 @@ export function DashboardShell({ payload }: DashboardShellProps) {
           <ActionsView
             commands={commands}
             projectId={selectedProject.id}
+            onCommandCreated={(command) => {
+              setCommands((current) => [command, ...current]);
+            }}
+          />
+        )}
+
+        {activeTab === "deployments" && (
+          <DeploymentsView
+            projectId={selectedProject.id}
+            repositories={repositories}
+            onRepositoriesChange={setRepositories}
             onCommandCreated={(command) => {
               setCommands((current) => [command, ...current]);
             }}
@@ -849,6 +863,173 @@ function commandStatusClass(status: string) {
   }
 
   return "severityWarning";
+}
+
+function DeploymentsView({
+  projectId,
+  repositories,
+  onRepositoriesChange,
+  onCommandCreated,
+}: {
+  projectId: string;
+  repositories: RepositoryDeploymentView[];
+  onRepositoriesChange: (repositories: RepositoryDeploymentView[]) => void;
+  onCommandCreated: (command: OpsCommand) => void;
+}) {
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function refreshRepositories() {
+    const response = await fetch("/api/repositories", { cache: "no-store" });
+    if (!response.ok) {
+      setMessage("Repository refresh failed.");
+      return;
+    }
+
+    onRepositoriesChange((await response.json()) as RepositoryDeploymentView[]);
+  }
+
+  async function toggleAutoDeploy(repository: RepositoryDeploymentView) {
+    const response = await fetch(`/api/repositories/${repository.repository.id}/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ autoDeployEnabled: !repository.repository.autoDeployEnabled }),
+    });
+
+    if (!response.ok) {
+      setMessage("Auto deploy update failed.");
+      return;
+    }
+
+    const updated = await response.json();
+    onRepositoriesChange(
+      repositories.map((item) =>
+        item.repository.id === repository.repository.id
+          ? { ...item, repository: updated }
+          : item,
+      ),
+    );
+    setMessage(`${repository.repository.fullName} auto deploy updated.`);
+  }
+
+  async function syncRepository(repository: RepositoryDeploymentView) {
+    const response = await fetch(`/api/repositories/${repository.repository.id}/sync`, {
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      setMessage("GitHub sync failed.");
+      return;
+    }
+
+    await refreshRepositories();
+    setMessage(`${repository.repository.fullName} synced.`);
+  }
+
+  async function deployLatest(repository: RepositoryDeploymentView) {
+    const response = await fetch("/api/commands", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        action: toWireCommandAction(repository.repository.deployAction),
+        target: null,
+        requestedBy: "portfolio-user",
+        confirmation: projectId,
+      } satisfies CreateCommandInput),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: "Deploy request failed." }));
+      setMessage(error.error ?? "Deploy request failed.");
+      return;
+    }
+
+    const command = (await response.json()) as OpsCommand;
+    onCommandCreated(command);
+    setMessage(`${repository.repository.fullName} deploy queued.`);
+  }
+
+  return (
+    <section className="deploymentGrid">
+      {repositories.length === 0 ? (
+        <section className="panel">
+          <span className="sectionLabel">Deployments</span>
+          <h2>No repositories connected</h2>
+        </section>
+      ) : (
+        repositories.map((repository) => (
+          <article className="panel repositoryPanel" key={repository.repository.id}>
+            <div className="panelHeader">
+              <div>
+                <span className="sectionLabel">{repository.repository.service}</span>
+                <h2>{repository.repository.fullName}</h2>
+              </div>
+              <span className={`statusPill ${repository.repository.autoDeployEnabled ? "severityHealthy" : "severityWarning"}`}>
+                {repository.repository.autoDeployEnabled ? "auto on" : "auto off"}
+              </span>
+            </div>
+
+            <div className="repoMetaGrid">
+              <span>
+                <GitBranch aria-hidden="true" />
+                {repository.repository.branch}
+              </span>
+              <span>
+                <Clock3 aria-hidden="true" />
+                {repository.latestCommit ? formatShortTime(repository.latestCommit.committedAt) : "not synced"}
+              </span>
+              <span>
+                <TerminalSquare aria-hidden="true" />
+                {repository.latestCommand?.status ?? "no deploys"}
+              </span>
+            </div>
+
+            <div className="deploymentActions">
+              <button onClick={() => deployLatest(repository)} type="button">
+                Deploy latest
+              </button>
+              <button onClick={() => syncRepository(repository)} type="button">
+                Sync commits
+              </button>
+              <button onClick={() => toggleAutoDeploy(repository)} type="button">
+                {repository.repository.autoDeployEnabled ? "Disable auto" : "Enable auto"}
+              </button>
+            </div>
+
+            <div className="commitTimeline">
+              {repository.recentCommits.length === 0 ? (
+                <small>No commits synced yet</small>
+              ) : (
+                repository.recentCommits.map((commit) => (
+                  <a className="commitItem" href={commit.url} key={`${repository.repository.id}-${commit.sha}`} rel="noreferrer" target="_blank">
+                    <span>
+                      <strong>{commit.message.split("\n")[0]}</strong>
+                      <small>{commit.authorLogin || commit.authorName} ยท {commit.sha.slice(0, 7)}</small>
+                    </span>
+                    <ExternalLink aria-hidden="true" />
+                  </a>
+                ))
+              )}
+            </div>
+          </article>
+        ))
+      )}
+      {message && <small className="formMessage">{message}</small>}
+    </section>
+  );
+}
+
+function toWireCommandAction(action: string) {
+  return action.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`).replace(/^_/, "");
+}
+
+function formatShortTime(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function RunbookView() {
