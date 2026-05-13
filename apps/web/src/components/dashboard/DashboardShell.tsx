@@ -1214,8 +1214,8 @@ function DeploymentsView({
                 const isExpanded = expandedRepos.has(repository.repository.id);
                 const visibleCommits = isExpanded
                   ? repository.recentCommits
-                  : repository.recentCommits.slice(0, 5);
-                const hasMore = repository.recentCommits.length > 5;
+                  : repository.recentCommits.slice(0, 4);
+                const hasMore = repository.recentCommits.length > 4;
                 return (
                   <>
                     {visibleCommits.map((commit) => {
@@ -1254,7 +1254,7 @@ function DeploymentsView({
                       >
                         {isExpanded
                           ? "Show less"
-                          : `Show ${repository.recentCommits.length - 5} more`}
+                          : `Show ${repository.recentCommits.length - 4} more`}
                       </button>
                     )}
                   </>

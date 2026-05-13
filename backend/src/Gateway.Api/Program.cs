@@ -278,7 +278,7 @@ static DashboardProject ToDashboardProject(
             ? 0
             : Convert.ToInt32(item.Endpoints.Average(endpoint => endpoint.LatencyMs));
 
-        return new TimelinePoint(item.CapturedAt.ToString("HH:mm"), report.Score, latency);
+        return new TimelinePoint(item.CapturedAt.ToOffset(TimeSpan.FromHours(7)).ToString("HH:mm"), report.Score, latency);
     }).ToList();
 
     return new DashboardProject(
