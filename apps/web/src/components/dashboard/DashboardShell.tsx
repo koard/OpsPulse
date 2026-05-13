@@ -650,15 +650,28 @@ function SloView({ report }: { report?: SloReport | null }) {
 
   return (
     <section className="workGrid">
-      <div className="panel heroPanel">
-        <div className="healthRing" style={{ "--score": report.availabilityPercent } as CSSProperties}>
-          <span>{report.availabilityPercent.toFixed(1)}</span>
+      <div className="panel sloHero">
+        <div className="sloRingContainer">
+          <svg viewBox="0 0 100 100" className="sloRingSvg">
+            <circle cx="50" cy="50" r="45" className="sloRingBg" />
+            <circle
+              cx="50"
+              cy="50"
+              r="45"
+              className="sloRingProgress"
+              style={{ strokeDashoffset: `calc(283 - (283 * ${report.availabilityPercent}) / 100)` }}
+            />
+          </svg>
+          <div className="sloRingText">
+            <span className="sloRingValue">{report.availabilityPercent.toFixed(1)}</span>
+            <span className="sloRingPercent">%</span>
+          </div>
         </div>
         <div className="heroCopy">
           <span className="sectionLabel">Service level objective</span>
           <h2>{summarizeSlo(report)}</h2>
           <p>
-            Target availability is {report.targetAvailabilityPercent.toFixed(2)}%.
+            Target availability is <strong>{report.targetAvailabilityPercent.toFixed(2)}%</strong>.
             Error budget burn helps decide whether to ship, pause, or investigate.
           </p>
         </div>
@@ -672,18 +685,31 @@ function SloView({ report }: { report?: SloReport | null }) {
           <Gauge aria-hidden="true" className="panelIcon" />
         </div>
         <div className="endpointList">
-          {report.endpoints.map((endpoint) => (
-            <div className="endpointItem" key={`${endpoint.name}-${endpoint.url}`}>
-              <span>
-                <strong>{endpoint.name}</strong>
-                <small>{endpoint.totalChecks} checks · {endpoint.failedChecks} failures</small>
-              </span>
-              <span className="endpointMeta">
-                {endpoint.availabilityPercent.toFixed(2)}%
-                <small>p95 {endpoint.p95LatencyMs} ms · p99 {endpoint.p99LatencyMs} ms</small>
-              </span>
-            </div>
-          ))}
+          {report.endpoints.map((endpoint) => {
+            const isHealthy = endpoint.availabilityPercent >= report.targetAvailabilityPercent;
+            return (
+              <div className={`endpointCard ${isHealthy ? "isHealthy" : "isFailing"}`} key={`${endpoint.name}-${endpoint.url}`}>
+                <div className="endpointHeader">
+                  <strong>{endpoint.name}</strong>
+                  <span className="availBadge">{endpoint.availabilityPercent.toFixed(2)}%</span>
+                </div>
+                <div className="endpointStats">
+                  <div className="endpointCheckInfo">
+                    <span><Activity size={12} aria-hidden="true"/> {endpoint.totalChecks} checks</span>
+                    {endpoint.failedChecks > 0 ? (
+                      <span className="failCount"><AlertTriangle size={12} aria-hidden="true"/> {endpoint.failedChecks} failures</span>
+                    ) : (
+                      <span>0 failures</span>
+                    )}
+                  </div>
+                  <div className="endpointLatency">
+                    <span>p95 <strong>{endpoint.p95LatencyMs}</strong>ms</span>
+                    <span>p99 <strong>{endpoint.p99LatencyMs}</strong>ms</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -714,9 +740,18 @@ function AgentInventory({ agents }: { agents: AgentStatus[] }) {
               {agent.driftIssues.length === 0 ? (
                 <small>No drift detected</small>
               ) : (
-                agent.driftIssues.map((issue) => (
-                  <small key={`${agent.projectId}-${issue.kind}-${issue.message}`}>{issue.message}</small>
-                ))
+                agent.driftIssues.map((issue) => {
+                  // Replace raw UTC dates in the message with Thai locale time
+                  const formattedMessage = issue.message.replace(
+                    /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/,
+                    (match) => formatThaiTime(match.replace(" ", "T"))
+                  );
+                  return (
+                    <small key={`${agent.projectId}-${issue.kind}-${issue.message}`}>
+                      {formattedMessage}
+                    </small>
+                  );
+                })
               )}
             </div>
           </article>
@@ -1130,12 +1165,25 @@ function toWireCommandAction(action: string) {
 }
 
 function formatShortTime(value: string) {
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat("th-TH", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Bangkok"
   }).format(new Date(value));
+}
+
+function formatThaiTime(isoString: string) {
+  return new Intl.DateTimeFormat("th-TH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "Asia/Bangkok"
+  }).format(new Date(isoString));
 }
 
 function formatRelativeTime(value: string) {
