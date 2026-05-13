@@ -990,63 +990,137 @@ function DeploymentsView({
         </section>
       ) : (
         repositories.map((repository) => (
-          <article className="panel repositoryPanel" key={repository.repository.id}>
-            <div className="panelHeader">
-              <div>
-                <span className="sectionLabel">{repository.repository.service}</span>
-                <h2>{repository.repository.fullName}</h2>
+          <article
+            className="repoCard"
+            key={repository.repository.id}
+            data-auto={repository.repository.autoDeployEnabled ? "on" : "off"}
+            data-deploy-status={repository.latestCommand?.status ?? "none"}
+          >
+            {/* ── Card Header ── */}
+            <div className="repoCardHeader">
+              <div className="repoCardTitle">
+                <span className="repoServiceBadge">{repository.repository.service}</span>
+                <h3>{repository.repository.fullName}</h3>
               </div>
-              <span className={`statusPill ${repository.repository.autoDeployEnabled ? "severityHealthy" : "severityWarning"}`}>
-                {repository.repository.autoDeployEnabled ? "auto on" : "auto off"}
-              </span>
+              <button
+                className={`autoDeployToggle ${repository.repository.autoDeployEnabled ? "isOn" : ""}`}
+                onClick={() => toggleAutoDeploy(repository)}
+                type="button"
+                title={
+                  repository.repository.autoDeployEnabled
+                    ? "Auto-deploy ON — click to disable"
+                    : "Auto-deploy OFF — click to enable"
+                }
+              >
+                <span className="toggleTrack">
+                  <span className="toggleThumb" />
+                </span>
+                <span className="toggleLabel">
+                  {repository.repository.autoDeployEnabled ? "Auto" : "Manual"}
+                </span>
+              </button>
             </div>
 
-            <div className="repoMetaGrid">
-              <span>
+            {/* ── Branch & Last Commit ── */}
+            <div className="repoBranchRow">
+              <span className="repoBranch">
                 <GitBranch aria-hidden="true" />
                 {repository.repository.branch}
               </span>
-              <span>
-                <Clock3 aria-hidden="true" />
-                {repository.latestCommit ? formatShortTime(repository.latestCommit.committedAt) : "not synced"}
-              </span>
-              <span>
-                <TerminalSquare aria-hidden="true" />
-                {repository.latestCommand?.status ?? "no deploys"}
-              </span>
+              {repository.latestCommit && (
+                <span className="repoSha">
+                  <span className="shaChip">{repository.latestCommit.sha.slice(0, 7)}</span>
+                  <Clock3 aria-hidden="true" />
+                  {formatRelativeTime(repository.latestCommit.committedAt)}
+                </span>
+              )}
             </div>
 
-            <div className="deploymentActions">
-              <button onClick={() => deployLatest(repository)} type="button">
-                Deploy latest
+            {/* ── Last Deploy Status Banner ── */}
+            <div
+              className={`deployStatusBanner ${
+                repository.latestCommand
+                  ? `status-${repository.latestCommand.status}`
+                  : "status-none"
+              }`}
+            >
+              <span className="deployStatusDot" />
+              <span className="deployStatusText">
+                {repository.latestCommand
+                  ? `Last deploy · ${repository.latestCommand.status}`
+                  : "No deployments yet"}
+              </span>
+              {repository.latestCommand && (
+                <span className="deployStatusAction">
+                  {toWireCommandAction(repository.latestCommand.action)}
+                </span>
+              )}
+            </div>
+
+            {/* ── Action Row ── */}
+            <div className="repoActionRow">
+              <button
+                className="repoActionPrimary"
+                onClick={() => deployLatest(repository)}
+                type="button"
+              >
+                <Activity aria-hidden="true" />
+                Deploy
               </button>
-              <button onClick={() => syncRepository(repository)} type="button">
-                Sync commits
-              </button>
-              <button onClick={() => toggleAutoDeploy(repository)} type="button">
-                {repository.repository.autoDeployEnabled ? "Disable auto" : "Enable auto"}
+              <button
+                className="repoActionSecondary"
+                onClick={() => syncRepository(repository)}
+                type="button"
+              >
+                <RefreshCcw aria-hidden="true" />
+                Sync
               </button>
             </div>
 
-            <div className="commitTimeline">
+            {/* ── Commit Timeline ── */}
+            <div className="repoCommitList">
+              <span className="repoCommitListLabel">Recent commits</span>
               {repository.recentCommits.length === 0 ? (
-                <small>No commits synced yet</small>
+                <div className="repoEmptyCommits">No commits synced yet</div>
               ) : (
-                repository.recentCommits.map((commit) => (
-                  <a className="commitItem" href={commit.url} key={`${repository.repository.id}-${commit.sha}`} rel="noreferrer" target="_blank">
-                    <span>
-                      <strong>{commit.message.split("\n")[0]}</strong>
-                      <small>{commit.authorLogin || commit.authorName} ยท {commit.sha.slice(0, 7)}</small>
-                    </span>
-                    <ExternalLink aria-hidden="true" />
-                  </a>
-                ))
+                repository.recentCommits.map((commit) => {
+                  const { type, rest } = parseCommitMessage(
+                    commit.message.split("\n")[0],
+                  );
+                  return (
+                    <a
+                      className="repoCommitEntry"
+                      href={commit.url}
+                      key={`${repository.repository.id}-${commit.sha}`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {type && (
+                        <span className={`commitTypeChip type-${type}`}>{type}</span>
+                      )}
+                      <span className="repoCommitBody">
+                        <span className="repoCommitMsg">
+                          {type ? rest : commit.message.split("\n")[0]}
+                        </span>
+                        <span className="repoCommitMeta">
+                          <span>{commit.authorLogin || commit.authorName}</span>
+                          <span className="shaChip">{commit.sha.slice(0, 7)}</span>
+                        </span>
+                      </span>
+                      <ExternalLink aria-hidden="true" className="repoCommitLink" />
+                    </a>
+                  );
+                })
               )}
             </div>
           </article>
         ))
       )}
-      {message && <small className="formMessage">{message}</small>}
+      {message && (
+        <p className="deployMessage">
+          <CheckCircle2 aria-hidden="true" size={14} /> {message}
+        </p>
+      )}
     </section>
   );
 }
