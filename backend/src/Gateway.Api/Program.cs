@@ -24,28 +24,23 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "gateway" 
 app.MapGet("/api/dashboard", async (IHttpClientFactory httpClientFactory, IConfiguration configuration) =>
 {
     var http = httpClientFactory.CreateClient();
-    var registryUrl = configuration["Services:ProjectRegistry"] ?? "http://localhost:5081";
     var telemetryUrl = configuration["Services:Telemetry"] ?? "http://localhost:5082";
 
-    var projects = await ReadJsonOrDefault(
+    var latestSnapshots = await ReadJsonOrDefault<IReadOnlyList<ProjectSnapshot>>(
         http,
-        $"{registryUrl}/projects",
-        DemoData.Projects);
+        $"{telemetryUrl}/snapshots/latest",
+        []);
 
     var dashboardProjects = new List<DashboardProject>();
 
-    foreach (var project in projects)
+    foreach (var snapshot in latestSnapshots)
     {
-        var latestSnapshot = await ReadJsonOrDefault(
-            http,
-            $"{telemetryUrl}/snapshots/latest/{project.Id}",
-            DemoData.LatestSnapshot);
         var history = await ReadJsonOrDefault(
             http,
-            $"{telemetryUrl}/snapshots/history/{project.Id}",
-            DemoData.SnapshotHistory);
+            $"{telemetryUrl}/snapshots/history/{Uri.EscapeDataString(snapshot.ProjectId)}",
+            Array.Empty<ProjectSnapshot>());
 
-        dashboardProjects.Add(ToDashboardProject(project, latestSnapshot, history));
+        dashboardProjects.Add(ToDashboardProject(snapshot, history));
     }
 
     return Results.Ok(new DashboardPayload(DateTimeOffset.UtcNow, dashboardProjects));
@@ -181,7 +176,6 @@ static async Task<HttpResponseMessage> PostJsonAsync<T>(HttpClient http, string 
 }
 
 static DashboardProject ToDashboardProject(
-    MonitoredProject project,
     ProjectSnapshot snapshot,
     IReadOnlyList<ProjectSnapshot> history)
 {
@@ -197,16 +191,37 @@ static DashboardProject ToDashboardProject(
     }).ToList();
 
     return new DashboardProject(
-        Id: project.Id,
-        Name: project.Name,
-        Environment: project.Environment,
-        Owner: project.Owner,
-        Server: project.Server,
+        Id: snapshot.ProjectId,
+        Name: ToDisplayName(snapshot.ProjectId),
+        Environment: ToEnvironment(snapshot.ProjectId),
+        Owner: "",
+        Server: new ServerProfile(
+            Hostname: snapshot.Agent?.Hostname ?? snapshot.ProjectId,
+            Os: snapshot.Agent?.Os ?? "unknown",
+            Access: "Public HTTPS ingest",
+            ReverseProxy: "Nginx",
+            ProcessManager: "PM2"),
         Endpoints: snapshot.Endpoints,
         Processes: snapshot.Processes,
         Metrics: snapshot.Metrics,
         Alerts: alerts,
         Timeline: timeline);
+}
+
+static string ToDisplayName(string projectId)
+{
+    return string.Join(
+        " ",
+        projectId
+            .Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => string.Concat(word[..1].ToUpperInvariant(), word[1..])));
+}
+
+static string ToEnvironment(string projectId)
+{
+    return projectId.Contains("prod", StringComparison.OrdinalIgnoreCase)
+        ? "Production"
+        : "Connected";
 }
 
 public sealed record DashboardPayload(

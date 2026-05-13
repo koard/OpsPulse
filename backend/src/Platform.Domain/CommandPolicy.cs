@@ -10,8 +10,12 @@ public static class CommandPolicy
             ["health_check_now"] = OpsCommandAction.HealthCheckNow,
             ["pm2_restart_process"] = OpsCommandAction.Pm2RestartProcess,
             ["redeploy_backend"] = OpsCommandAction.RedeployBackend,
+            ["redeploy_frontend"] = OpsCommandAction.RedeployFrontend,
+            ["redeploy_admin"] = OpsCommandAction.RedeployAdmin,
             ["prisma_migrate_deploy"] = OpsCommandAction.PrismaMigrateDeploy,
-            ["rollback_backend"] = OpsCommandAction.RollbackBackend
+            ["rollback_backend"] = OpsCommandAction.RollbackBackend,
+            ["rollback_frontend"] = OpsCommandAction.RollbackFrontend,
+            ["rollback_admin"] = OpsCommandAction.RollbackAdmin
         };
 
     public static IReadOnlySet<string> AllowedPm2Processes { get; } =
@@ -108,8 +112,12 @@ public static class CommandPolicy
             OpsCommandAction.HealthCheckNow => "health_check_now",
             OpsCommandAction.Pm2RestartProcess => "pm2_restart_process",
             OpsCommandAction.RedeployBackend => "redeploy_backend",
+            OpsCommandAction.RedeployFrontend => "redeploy_frontend",
+            OpsCommandAction.RedeployAdmin => "redeploy_admin",
             OpsCommandAction.PrismaMigrateDeploy => "prisma_migrate_deploy",
             OpsCommandAction.RollbackBackend => "rollback_backend",
+            OpsCommandAction.RollbackFrontend => "rollback_frontend",
+            OpsCommandAction.RollbackAdmin => "rollback_admin",
             _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
         };
     }
@@ -123,9 +131,13 @@ public static class CommandPolicy
         {
             OpsCommandAction.HealthCheckNow => ("dukefarm-production", null),
             OpsCommandAction.RedeployBackend => ("dukefarm-backend", null),
+            OpsCommandAction.RedeployFrontend => ("dukefarm-frontend", null),
+            OpsCommandAction.RedeployAdmin => ("dukefarm-admin", null),
             OpsCommandAction.PrismaMigrateDeploy => ("dukefarm-backend", null),
             OpsCommandAction.Pm2RestartProcess => ResolvePm2Target(target),
-            OpsCommandAction.RollbackBackend => ResolveRollbackTarget(history),
+            OpsCommandAction.RollbackBackend => ResolveRollbackTarget(history, OpsCommandAction.RedeployBackend),
+            OpsCommandAction.RollbackFrontend => ResolveRollbackTarget(history, OpsCommandAction.RedeployFrontend),
+            OpsCommandAction.RollbackAdmin => ResolveRollbackTarget(history, OpsCommandAction.RedeployAdmin),
             _ => ("", "Unsupported command action.")
         };
     }
@@ -142,11 +154,13 @@ public static class CommandPolicy
             : (target, $"Process '{target}' is not allowlisted.");
     }
 
-    private static (string Target, string? Error) ResolveRollbackTarget(IReadOnlyList<OpsCommand> history)
+    private static (string Target, string? Error) ResolveRollbackTarget(
+        IReadOnlyList<OpsCommand> history,
+        OpsCommandAction redeployAction)
     {
         var previousCommit = history
             .Where(command =>
-                command.Action == OpsCommandAction.RedeployBackend &&
+                command.Action == redeployAction &&
                 command.Status == OpsCommandStatus.Succeeded &&
                 !string.IsNullOrWhiteSpace(command.ReleaseCommit))
             .OrderByDescending(command => command.FinishedAt ?? command.RequestedAt)
@@ -154,7 +168,7 @@ public static class CommandPolicy
             ?.ReleaseCommit;
 
         return previousCommit is null
-            ? ("", "No successful redeploy commit is available for rollback.")
+            ? ("", $"No successful {ToWireName(redeployAction)} commit is available for rollback.")
             : (previousCommit, null);
     }
 

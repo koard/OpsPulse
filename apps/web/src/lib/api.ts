@@ -1,11 +1,15 @@
-import { sampleDashboardPayload, sampleSrePayload } from "./sample-data";
 import type { AgentStatus, DashboardPayload, Incident, OpsCommand, SloReport, SrePayload } from "./types";
+
+const emptyDashboardPayload = (): DashboardPayload => ({
+  generatedAt: new Date().toISOString(),
+  projects: [],
+});
 
 export async function getDashboardPayload(): Promise<DashboardPayload> {
   const apiBaseUrl = process.env.API_BASE_URL;
 
   if (!apiBaseUrl) {
-    return sampleDashboardPayload;
+    return emptyDashboardPayload();
   }
 
   try {
@@ -14,12 +18,12 @@ export async function getDashboardPayload(): Promise<DashboardPayload> {
     });
 
     if (!response.ok) {
-      return sampleDashboardPayload;
+      return emptyDashboardPayload();
     }
 
     return (await response.json()) as DashboardPayload;
   } catch {
-    return sampleDashboardPayload;
+    return emptyDashboardPayload();
   }
 }
 
@@ -29,14 +33,14 @@ export async function getSrePayload(): Promise<SrePayload> {
   const apiBaseUrl = process.env.API_BASE_URL;
 
   if (!apiBaseUrl || !projectId) {
-    return { ...sampleSrePayload, dashboard };
+    return { dashboard, incidents: [], agents: [], commands: [], slo: null };
   }
 
   const [incidents, agents, commands, slo] = await Promise.all([
-    fetchJsonOrDefault<Incident[]>(`${apiBaseUrl}/api/incidents`, sampleSrePayload.incidents),
-    fetchJsonOrDefault<AgentStatus[]>(`${apiBaseUrl}/api/agents`, sampleSrePayload.agents),
-    fetchJsonOrDefault<OpsCommand[]>(`${apiBaseUrl}/api/commands?projectId=${projectId}`, sampleSrePayload.commands),
-    fetchJsonOrDefault<SloReport | null>(`${apiBaseUrl}/api/slo/${projectId}`, sampleSrePayload.slo ?? null),
+    fetchJsonOrDefault<Incident[]>(`${apiBaseUrl}/api/incidents`, []),
+    fetchJsonOrDefault<AgentStatus[]>(`${apiBaseUrl}/api/agents`, []),
+    fetchJsonOrDefault<OpsCommand[]>(`${apiBaseUrl}/api/commands?projectId=${projectId}`, []),
+    fetchJsonOrDefault<SloReport | null>(`${apiBaseUrl}/api/slo/${projectId}`, null),
   ]);
 
   return { dashboard, incidents, agents, commands, slo };

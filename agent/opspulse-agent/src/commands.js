@@ -13,7 +13,6 @@ const allowedProcesses = new Set([
 
 export function planCommandSteps(command, config) {
   const action = normalizeAction(command.action);
-  const backendDir = requireBackendDir(config);
   const branch = config.dukeFarmBranch ?? "main";
 
   switch (action) {
@@ -23,32 +22,90 @@ export function planCommandSteps(command, config) {
       assertAllowedProcess(command.target);
       return [{ command: "pm2", args: ["restart", command.target] }];
     case "redeploy_backend":
-      return [
-        { command: "git", args: ["fetch", "origin", branch], cwd: backendDir },
-        { command: "git", args: ["reset", "--hard", `origin/${branch}`], cwd: backendDir },
-        { command: "git", args: ["rev-parse", "HEAD"], cwd: backendDir, captureReleaseCommit: true },
-        { command: "npm", args: ["ci"], cwd: backendDir },
-        { command: "npm", args: ["run", "prisma:generate"], cwd: backendDir },
-        { command: "npm", args: ["run", "build"], cwd: backendDir },
-        { command: "pm2", args: ["restart", "dukefarm-backend"] },
-      ];
+      return redeploySteps(deployProfile("backend", config), branch, true);
+    case "redeploy_frontend":
+      return redeploySteps(deployProfile("frontend", config), branch, false);
+    case "redeploy_admin":
+      return redeploySteps(deployProfile("admin", config), branch, false);
     case "prisma_migrate_deploy":
-      return [{ command: "npx", args: ["prisma", "migrate", "deploy"], cwd: backendDir }];
+      return [{ command: "npx", args: ["prisma", "migrate", "deploy"], cwd: deployProfile("backend", config).dir }];
     case "rollback_backend":
-      if (!command.target) {
-        throw new Error("Rollback target commit is required");
-      }
-
-      return [
-        { command: "git", args: ["reset", "--hard", command.target], cwd: backendDir },
-        { command: "npm", args: ["ci"], cwd: backendDir },
-        { command: "npm", args: ["run", "prisma:generate"], cwd: backendDir },
-        { command: "npm", args: ["run", "build"], cwd: backendDir },
-        { command: "pm2", args: ["restart", "dukefarm-backend"] },
-      ];
+      return rollbackSteps(command, deployProfile("backend", config), true);
+    case "rollback_frontend":
+      return rollbackSteps(command, deployProfile("frontend", config), false);
+    case "rollback_admin":
+      return rollbackSteps(command, deployProfile("admin", config), false);
     default:
       throw new Error(`Unsupported command action '${command.action}'`);
   }
+}
+
+function redeploySteps(profile, branch, includePrismaGenerate) {
+  const steps = [
+    { command: "git", args: ["fetch", "origin", branch], cwd: profile.dir },
+    { command: "git", args: ["reset", "--hard", `origin/${branch}`], cwd: profile.dir },
+    { command: "git", args: ["rev-parse", "HEAD"], cwd: profile.dir, captureReleaseCommit: true },
+    { command: "npm", args: ["ci"], cwd: profile.dir },
+  ];
+
+  if (includePrismaGenerate) {
+    steps.push({ command: "npm", args: ["run", "prisma:generate"], cwd: profile.dir });
+  }
+
+  steps.push(
+    { command: "npm", args: ["run", "build"], cwd: profile.dir },
+    { command: "pm2", args: ["restart", profile.process] },
+  );
+
+  return steps;
+}
+
+function rollbackSteps(command, profile, includePrismaGenerate) {
+  if (!command.target) {
+    throw new Error("Rollback target commit is required");
+  }
+
+  const steps = [
+    { command: "git", args: ["reset", "--hard", command.target], cwd: profile.dir },
+    { command: "npm", args: ["ci"], cwd: profile.dir },
+  ];
+
+  if (includePrismaGenerate) {
+    steps.push({ command: "npm", args: ["run", "prisma:generate"], cwd: profile.dir });
+  }
+
+  steps.push(
+    { command: "npm", args: ["run", "build"], cwd: profile.dir },
+    { command: "pm2", args: ["restart", profile.process] },
+  );
+
+  return steps;
+}
+
+function deployProfile(service, config) {
+  const profiles = {
+    backend: {
+      dir: config.dukeFarmBackendDir,
+      envName: "DUKEFARM_BACKEND_DIR",
+      process: "dukefarm-backend",
+    },
+    frontend: {
+      dir: config.dukeFarmFrontendDir,
+      envName: "DUKEFARM_FRONTEND_DIR",
+      process: "dukefarm-frontend",
+    },
+    admin: {
+      dir: config.dukeFarmAdminDir,
+      envName: "DUKEFARM_ADMIN_DIR",
+      process: "dukefarm-admin",
+    },
+  };
+  const profile = profiles[service];
+  if (!profile?.dir) {
+    throw new Error(`${profile?.envName ?? service} is required for deployment commands`);
+  }
+
+  return profile;
 }
 
 export async function executeOpsCommand(command, config, runner = runStep) {
@@ -80,7 +137,14 @@ export async function executeOpsCommand(command, config, runner = runStep) {
       }
     }
 
-    if (["redeploy_backend", "rollback_backend"].includes(normalizeAction(command.action))) {
+    if ([
+      "redeploy_backend",
+      "redeploy_frontend",
+      "redeploy_admin",
+      "rollback_backend",
+      "rollback_frontend",
+      "rollback_admin",
+    ].includes(normalizeAction(command.action))) {
       const health = await runHealthChecks(config);
       stdout += `health verify\n${JSON.stringify(health, null, 2)}\n`;
       if (health.some((check) => check.statusCode < 200 || check.statusCode >= 400)) {
@@ -199,14 +263,6 @@ function assertAllowedProcess(processName) {
   if (!allowedProcesses.has(processName)) {
     throw new Error(`Process '${processName}' is not allowlisted`);
   }
-}
-
-function requireBackendDir(config) {
-  if (!config.dukeFarmBackendDir) {
-    throw new Error("DUKEFARM_BACKEND_DIR is required for deployment commands");
-  }
-
-  return config.dukeFarmBackendDir;
 }
 
 function agentHeaders(config) {

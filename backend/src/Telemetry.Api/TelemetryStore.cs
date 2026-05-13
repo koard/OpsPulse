@@ -10,6 +10,8 @@ public interface ITelemetryStore
 
     Task<ProjectSnapshot?> GetLatestSnapshotAsync(string projectId, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<ProjectSnapshot>> GetLatestSnapshotsAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyList<ProjectSnapshot>> GetSnapshotHistoryAsync(string projectId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Incident>> GetIncidentsAsync(string? projectId, CancellationToken cancellationToken);
@@ -58,20 +60,6 @@ public sealed class InMemoryTelemetryStore : ITelemetryStore
     private readonly ConcurrentDictionary<string, OpsCommand> commands = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentBag<CommandAuditEntry> commandAudit = [];
 
-    public InMemoryTelemetryStore()
-    {
-        snapshots[DemoData.PrimaryProjectId] = DemoData.SnapshotHistory.ToList();
-        var seedIncidents = IncidentPolicy.ApplyAlerts(
-            [],
-            DemoData.LatestSnapshot,
-            AlertEvaluator.Evaluate(DemoData.LatestSnapshot));
-
-        foreach (var incident in seedIncidents)
-        {
-            incidents[incident.Id] = incident;
-        }
-    }
-
     public Task SaveSnapshotAsync(ProjectSnapshot snapshot, IReadOnlyList<Incident> updatedIncidents, CancellationToken cancellationToken)
     {
         var history = snapshots.GetOrAdd(snapshot.ProjectId, _ => []);
@@ -101,6 +89,23 @@ public sealed class InMemoryTelemetryStore : ITelemetryStore
         {
             return Task.FromResult<ProjectSnapshot?>(history[^1]);
         }
+    }
+
+    public Task<IReadOnlyList<ProjectSnapshot>> GetLatestSnapshotsAsync(CancellationToken cancellationToken)
+    {
+        var latest = snapshots.Values
+            .Select(history =>
+            {
+                lock (history)
+                {
+                    return history.Count == 0 ? null : history[^1];
+                }
+            })
+            .OfType<ProjectSnapshot>()
+            .OrderBy(snapshot => snapshot.ProjectId)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<ProjectSnapshot>>(latest);
     }
 
     public Task<IReadOnlyList<ProjectSnapshot>> GetSnapshotHistoryAsync(string projectId, CancellationToken cancellationToken)
@@ -376,6 +381,30 @@ public sealed class PostgresTelemetryStore(string connectionString) : ITelemetry
 
         var payload = await command.ExecuteScalarAsync(cancellationToken) as string;
         return payload is null ? null : JsonSerializer.Deserialize<ProjectSnapshot>(payload, TelemetryJson.Options);
+    }
+
+    public async Task<IReadOnlyList<ProjectSnapshot>> GetLatestSnapshotsAsync(CancellationToken cancellationToken)
+    {
+        var results = new List<ProjectSnapshot>();
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select distinct on (project_id) payload
+            from snapshots
+            order by project_id, captured_at desc;
+            """, connection);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var snapshot = JsonSerializer.Deserialize<ProjectSnapshot>(reader.GetString(0), TelemetryJson.Options);
+            if (snapshot is not null)
+            {
+                results.Add(snapshot);
+            }
+        }
+
+        return results;
     }
 
     public async Task<IReadOnlyList<ProjectSnapshot>> GetSnapshotHistoryAsync(string projectId, CancellationToken cancellationToken)

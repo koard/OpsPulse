@@ -33,6 +33,8 @@ OPSPULSE_COMMAND_POLL_MS=15000
 OPSPULSE_COMMAND_TIMEOUT_MS=120000
 DUKEFARM_BASE_URL=http://127.0.0.1:4000
 DUKEFARM_BACKEND_DIR=/path/to/DukeFarm-Backend
+DUKEFARM_FRONTEND_DIR=/path/to/DukeFarm-Frontend
+DUKEFARM_ADMIN_DIR=/path/to/DukeFarm-Admin
 DUKEFARM_BRANCH=main
 ```
 
@@ -74,8 +76,11 @@ Supported actions:
 - `health_check_now` checks `/healthz` and `/api/v1/health`.
 - `pm2_restart_process` restarts only `dukefarm-backend`, `dukefarm-admin`, `dukefarm-frontend`, or `opspulse-agent`.
 - `redeploy_backend` runs `git fetch`, `git reset --hard origin/$DUKEFARM_BRANCH`, `npm ci`, `npm run prisma:generate`, `npm run build`, `pm2 restart dukefarm-backend`, then health verification.
+- `redeploy_frontend` runs `git fetch`, `git reset --hard origin/$DUKEFARM_BRANCH`, `npm ci`, `npm run build`, `pm2 restart dukefarm-frontend`, then health verification.
+- `redeploy_admin` runs `git fetch`, `git reset --hard origin/$DUKEFARM_BRANCH`, `npm ci`, `npm run build`, `pm2 restart dukefarm-admin`, then health verification.
 - `prisma_migrate_deploy` runs `npx prisma migrate deploy` as a separate explicit action.
 - `rollback_backend` resets to the latest successful redeploy commit recorded by OpsPulse, rebuilds, restarts, then health-checks.
+- `rollback_frontend` and `rollback_admin` reset to the latest successful redeploy commit for that same service, rebuild, restart, then health-check.
 
 Before enabling redeploy/rollback, confirm:
 
@@ -85,5 +90,16 @@ git status --short
 npm ci
 npm run prisma:generate
 npm run build
+
+cd "$DUKEFARM_FRONTEND_DIR"
+git status --short
+npm ci
+npm run build
+
+cd "$DUKEFARM_ADMIN_DIR"
+git status --short
+npm ci
+npm run build
+
 pm2 status
 ```

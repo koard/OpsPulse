@@ -15,6 +15,8 @@ const config = {
   commandTimeoutMs: Number(process.env.OPSPULSE_COMMAND_TIMEOUT_MS ?? 120000),
   dukeFarmBaseUrl: process.env.DUKEFARM_BASE_URL ?? "http://127.0.0.1:4000",
   dukeFarmBackendDir: process.env.DUKEFARM_BACKEND_DIR,
+  dukeFarmFrontendDir: process.env.DUKEFARM_FRONTEND_DIR,
+  dukeFarmAdminDir: process.env.DUKEFARM_ADMIN_DIR,
   dukeFarmBranch: process.env.DUKEFARM_BRANCH ?? "main",
 };
 

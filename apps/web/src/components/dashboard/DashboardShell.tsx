@@ -690,8 +690,12 @@ const commandActions = [
   { value: "health_check_now", label: "Health Check Now", confirmation: "project" },
   { value: "pm2_restart_process", label: "Restart PM2 Process", confirmation: "target" },
   { value: "redeploy_backend", label: "Redeploy Backend", confirmation: "project" },
+  { value: "redeploy_frontend", label: "Redeploy Frontend", confirmation: "project" },
+  { value: "redeploy_admin", label: "Redeploy Admin", confirmation: "project" },
   { value: "prisma_migrate_deploy", label: "Run Prisma Migrate Deploy", confirmation: "project" },
-  { value: "rollback_backend", label: "Rollback Last Release", confirmation: "project" },
+  { value: "rollback_backend", label: "Rollback Backend", confirmation: "project" },
+  { value: "rollback_frontend", label: "Rollback Frontend", confirmation: "project" },
+  { value: "rollback_admin", label: "Rollback Admin", confirmation: "project" },
 ] as const;
 
 const processTargets = [
@@ -705,8 +709,12 @@ const commandActionLabel: Record<string, string> = {
   healthCheckNow: "Health Check Now",
   pm2RestartProcess: "Restart PM2 Process",
   redeployBackend: "Redeploy Backend",
+  redeployFrontend: "Redeploy Frontend",
+  redeployAdmin: "Redeploy Admin",
   prismaMigrateDeploy: "Prisma Migrate Deploy",
-  rollbackBackend: "Rollback",
+  rollbackBackend: "Rollback Backend",
+  rollbackFrontend: "Rollback Frontend",
+  rollbackAdmin: "Rollback Admin",
 };
 
 function ActionsView({

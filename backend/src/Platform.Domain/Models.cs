@@ -33,8 +33,12 @@ public enum OpsCommandAction
     HealthCheckNow,
     Pm2RestartProcess,
     RedeployBackend,
+    RedeployFrontend,
+    RedeployAdmin,
     PrismaMigrateDeploy,
-    RollbackBackend
+    RollbackBackend,
+    RollbackFrontend,
+    RollbackAdmin
 }
 
 public enum OpsCommandStatus

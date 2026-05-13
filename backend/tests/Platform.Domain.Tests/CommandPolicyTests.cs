@@ -56,6 +56,29 @@ public sealed class CommandPolicyTests
         Assert.Equal("dukefarm-backend", result.Command.Target);
     }
 
+    [Theory]
+    [InlineData("redeploy_frontend", OpsCommandAction.RedeployFrontend, "dukefarm-frontend")]
+    [InlineData("redeploy_admin", OpsCommandAction.RedeployAdmin, "dukefarm-admin")]
+    public void CreateCommand_CreatesPendingFrontendAndAdminRedeployCommands(
+        string action,
+        OpsCommandAction expectedAction,
+        string expectedTarget)
+    {
+        var result = CommandPolicy.CreateCommand(
+            projectId: "dukefarm-production",
+            action: action,
+            target: null,
+            requestedBy: "portfolio-user",
+            confirmation: "dukefarm-production",
+            history: [],
+            requestedAt: DateTimeOffset.Parse("2026-05-12T10:00:00Z"));
+
+        Assert.True(result.IsAccepted);
+        Assert.NotNull(result.Command);
+        Assert.Equal(expectedAction, result.Command.Action);
+        Assert.Equal(expectedTarget, result.Command.Target);
+    }
+
     [Fact]
     public void CreateCommand_RollbackUsesLatestSuccessfulRedeployCommit()
     {
@@ -75,6 +98,32 @@ public sealed class CommandPolicyTests
         Assert.NotNull(result.Command);
         Assert.Equal(OpsCommandAction.RollbackBackend, result.Command.Action);
         Assert.Equal("def222", result.Command.Target);
+    }
+
+    [Fact]
+    public void CreateCommand_FrontendRollbackUsesLatestSuccessfulFrontendCommit()
+    {
+        var backend = SeedCommand("backend", DateTimeOffset.Parse("2026-05-12T10:00:00Z"), "backend111");
+        var frontend = SeedCommand(
+            "frontend",
+            DateTimeOffset.Parse("2026-05-12T09:00:00Z"),
+            "frontend222",
+            OpsCommandAction.RedeployFrontend,
+            "dukefarm-frontend");
+
+        var result = CommandPolicy.CreateCommand(
+            projectId: "dukefarm-production",
+            action: "rollback_frontend",
+            target: null,
+            requestedBy: "portfolio-user",
+            confirmation: "dukefarm-production",
+            history: [backend, frontend],
+            requestedAt: DateTimeOffset.Parse("2026-05-12T11:00:00Z"));
+
+        Assert.True(result.IsAccepted);
+        Assert.NotNull(result.Command);
+        Assert.Equal(OpsCommandAction.RollbackFrontend, result.Command.Action);
+        Assert.Equal("frontend222", result.Command.Target);
     }
 
     [Fact]
@@ -105,13 +154,18 @@ public sealed class CommandPolicyTests
         Assert.NotNull(completed.FinishedAt);
     }
 
-    private static OpsCommand SeedCommand(string id, DateTimeOffset requestedAt, string commit)
+    private static OpsCommand SeedCommand(
+        string id,
+        DateTimeOffset requestedAt,
+        string commit,
+        OpsCommandAction action = OpsCommandAction.RedeployBackend,
+        string target = "dukefarm-backend")
     {
         return new OpsCommand(
             Id: id,
             ProjectId: "dukefarm-production",
-            Action: OpsCommandAction.RedeployBackend,
-            Target: "dukefarm-backend",
+            Action: action,
+            Target: target,
             Status: OpsCommandStatus.Succeeded,
             RequestedBy: "portfolio-user",
             RequestedAt: requestedAt,

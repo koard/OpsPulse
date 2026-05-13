@@ -44,6 +44,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       AgentTokens__dukefarm-production: ${DUKEFARM_AGENT_TOKEN}
+      AgentTokens__dukefarm: ${DUKEFARM_AGENT_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,7 +65,7 @@ services:
     restart: unless-stopped
     environment:
       Services__Telemetry: http://telemetry:8080
-      Alerting__ProjectId: dukefarm-production
+      Alerting__ProjectId: ${MONITORED_PROJECT_ID:-dukefarm-production}
       Alerting__IntervalSeconds: 30
     depends_on:
       - telemetry

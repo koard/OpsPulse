@@ -22,7 +22,6 @@ ITelemetryStore store = string.IsNullOrWhiteSpace(databaseUrl)
 if (store is PostgresTelemetryStore postgresStore)
 {
     await postgresStore.InitializeAsync(CancellationToken.None);
-    await SeedDemoSnapshotsWhenEmpty(store, CancellationToken.None);
 }
 
 var app = builder.Build();
@@ -58,6 +57,11 @@ app.MapPost("/ingest/snapshots", async (HttpRequest request, ProjectSnapshot sna
 
     var incidents = await ApplySnapshot(store, snapshotWithAgent, cancellationToken);
     return Results.Accepted($"/snapshots/latest/{snapshot.ProjectId}", new { snapshot = snapshotWithAgent, incidents });
+});
+
+app.MapGet("/snapshots/latest", async (CancellationToken cancellationToken) =>
+{
+    return Results.Ok(await store.GetLatestSnapshotsAsync(cancellationToken));
 });
 
 app.MapGet("/snapshots/latest/{projectId}", async Task<IResult> (string projectId, CancellationToken cancellationToken) =>
@@ -108,7 +112,18 @@ app.MapGet("/slo/{projectId}", async Task<IResult> (string projectId, Cancellati
 
 app.MapGet("/agents", async (CancellationToken cancellationToken) =>
 {
-    var statuses = await store.GetAgentStatusesAsync(ProjectRegistry.ExpectedProcessesByProject, DateTimeOffset.UtcNow, TimeSpan.FromMinutes(3), cancellationToken);
+    var snapshots = await store.GetLatestSnapshotsAsync(cancellationToken);
+    var statuses = snapshots
+        .Select(snapshot =>
+        {
+            var expected = ProjectRegistry.ExpectedProcessesByProject.TryGetValue(snapshot.ProjectId, out var processes)
+                ? processes
+                : ProjectRegistry.DefaultExpectedProcesses;
+
+            return AgentPolicy.Evaluate(snapshot, expected, DateTimeOffset.UtcNow, TimeSpan.FromMinutes(3));
+        })
+        .ToList();
+
     return Results.Ok(statuses);
 });
 
@@ -200,20 +215,6 @@ static async Task<IReadOnlyList<Incident>> ApplySnapshot(
     return incidents;
 }
 
-static async Task SeedDemoSnapshotsWhenEmpty(ITelemetryStore store, CancellationToken cancellationToken)
-{
-    var latestSnapshot = await store.GetLatestSnapshotAsync(DemoData.PrimaryProjectId, cancellationToken);
-    if (latestSnapshot is not null)
-    {
-        return;
-    }
-
-    foreach (var snapshot in DemoData.SnapshotHistory)
-    {
-        await ApplySnapshot(store, snapshot, cancellationToken);
-    }
-}
-
 static bool IsAuthorizedAgent(HttpRequest request, string projectId, IConfiguration configuration)
 {
     var expectedToken = configuration[$"AgentTokens:{projectId}"];
@@ -255,10 +256,13 @@ public sealed record CommandResultRequest(
 
 public static class ProjectRegistry
 {
+    public static IReadOnlyList<string> DefaultExpectedProcesses { get; } =
+        ["dukefarm-backend", "dukefarm-frontend", "dukefarm-admin", "opspulse-agent"];
+
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> ExpectedProcessesByProject { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            [DemoData.PrimaryProjectId] = ["frontend", "admin", "backend"],
+            ["dukefarm"] = DefaultExpectedProcesses,
             ["dukefarm-production"] = ["dukefarm-backend", "dukefarm-frontend", "dukefarm-admin", "opspulse-agent"]
         };
 }

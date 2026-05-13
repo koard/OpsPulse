@@ -6,8 +6,12 @@ export type OpsCommandAction =
   | "healthCheckNow"
   | "pm2RestartProcess"
   | "redeployBackend"
+  | "redeployFrontend"
+  | "redeployAdmin"
   | "prismaMigrateDeploy"
-  | "rollbackBackend";
+  | "rollbackBackend"
+  | "rollbackFrontend"
+  | "rollbackAdmin";
 export type OpsCommandStatus =
   | "pending"
   | "claimed"

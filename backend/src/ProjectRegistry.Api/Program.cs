@@ -13,19 +13,11 @@ app.UseCors();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "project-registry" }));
 
-app.MapGet("/projects", () => Results.Ok(DemoData.Projects));
+app.MapGet("/projects", () => Results.Ok(Array.Empty<MonitoredProject>()));
 
 app.MapGet("/projects/{id}", IResult (string id) =>
 {
-    var project = DemoData.Projects.FirstOrDefault(candidate =>
-        string.Equals(candidate.Id, id, StringComparison.OrdinalIgnoreCase));
-
-    if (project is null)
-    {
-        return Results.NotFound();
-    }
-
-    return Results.Ok(project);
+    return Results.NotFound();
 });
 
 app.Run();

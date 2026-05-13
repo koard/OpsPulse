@@ -6,6 +6,8 @@ const baseConfig = {
   projectId: "dukefarm-production",
   dukeFarmBaseUrl: "http://127.0.0.1:4000",
   dukeFarmBackendDir: "/srv/DukeFarm-Backend",
+  dukeFarmFrontendDir: "/srv/DukeFarm-Frontend",
+  dukeFarmAdminDir: "/srv/DukeFarm-Admin",
   dukeFarmBranch: "main",
 };
 
@@ -25,6 +27,44 @@ test("plans redeploy backend in production-safe order", () => {
       ["npm", ["run", "prisma:generate"], "/srv/DukeFarm-Backend"],
       ["npm", ["run", "build"], "/srv/DukeFarm-Backend"],
       ["pm2", ["restart", "dukefarm-backend"], undefined],
+    ],
+  );
+});
+
+test("plans redeploy frontend with frontend directory and PM2 target", () => {
+  const steps = planCommandSteps(
+    { action: "redeployFrontend", target: "dukefarm-frontend" },
+    baseConfig,
+  );
+
+  assert.deepEqual(
+    steps.map((step) => [step.command, step.args, step.cwd]),
+    [
+      ["git", ["fetch", "origin", "main"], "/srv/DukeFarm-Frontend"],
+      ["git", ["reset", "--hard", "origin/main"], "/srv/DukeFarm-Frontend"],
+      ["git", ["rev-parse", "HEAD"], "/srv/DukeFarm-Frontend"],
+      ["npm", ["ci"], "/srv/DukeFarm-Frontend"],
+      ["npm", ["run", "build"], "/srv/DukeFarm-Frontend"],
+      ["pm2", ["restart", "dukefarm-frontend"], undefined],
+    ],
+  );
+});
+
+test("plans redeploy admin with admin directory and PM2 target", () => {
+  const steps = planCommandSteps(
+    { action: "redeployAdmin", target: "dukefarm-admin" },
+    baseConfig,
+  );
+
+  assert.deepEqual(
+    steps.map((step) => [step.command, step.args, step.cwd]),
+    [
+      ["git", ["fetch", "origin", "main"], "/srv/DukeFarm-Admin"],
+      ["git", ["reset", "--hard", "origin/main"], "/srv/DukeFarm-Admin"],
+      ["git", ["rev-parse", "HEAD"], "/srv/DukeFarm-Admin"],
+      ["npm", ["ci"], "/srv/DukeFarm-Admin"],
+      ["npm", ["run", "build"], "/srv/DukeFarm-Admin"],
+      ["pm2", ["restart", "dukefarm-admin"], undefined],
     ],
   );
 });

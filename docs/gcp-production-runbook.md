@@ -40,8 +40,18 @@ chmod 600 .env
 Edit `.env`, then run:
 
 ```bash
+docker build -t opspulse-project-registry:latest -f backend/src/ProjectRegistry.Api/Dockerfile backend
+docker build -t opspulse-telemetry:latest -f backend/src/Telemetry.Api/Dockerfile backend
+docker build -t opspulse-gateway:latest -f backend/src/Gateway.Api/Dockerfile backend
+docker build -t opspulse-alerting:latest -f backend/src/Alerting.Worker/Dockerfile backend
+docker build -t opspulse-web:latest apps/web
 docker compose --env-file .env -f docker-compose.prod.yml up -d
 ```
+
+If you change the agent `PROJECT_ID`, set the same value in `MONITORED_PROJECT_ID`.
+The production compose file accepts both `dukefarm-production` and `dukefarm`
+agent tokens by default, but command history and alert checks are cleaner when
+the IDs match.
 
 ## 4. Smoke checks
 
