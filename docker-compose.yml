@@ -60,6 +60,14 @@ services:
       Services__Telemetry: http://telemetry:8080
       Alerting__ProjectId: dukefarm
       Alerting__IntervalSeconds: 30
+      # Email notification (optional — leave blank to disable)
+      Alerting__Email__SmtpHost: ${ALERT_SMTP_HOST:-}
+      Alerting__Email__SmtpPort: ${ALERT_SMTP_PORT:-587}
+      Alerting__Email__Username: ${ALERT_SMTP_USER:-}
+      Alerting__Email__Password: ${ALERT_SMTP_PASS:-}
+      Alerting__Email__From: ${ALERT_EMAIL_FROM:-}
+      Alerting__Email__To: ${ALERT_EMAIL_TO:-}
+      Alerting__Email__CooldownMinutes: ${ALERT_COOLDOWN_MINUTES:-30}
     depends_on:
       - telemetry
 

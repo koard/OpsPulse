@@ -864,7 +864,7 @@ const commandActions = [
     items: [
       { value: "redeploy_backend",  label: "Redeploy Backend",  description: "Pull latest & restart backend service",  confirmation: "project", risk: "warn" },
       { value: "redeploy_frontend", label: "Redeploy Frontend", description: "Pull latest & rebuild frontend assets",  confirmation: "project", risk: "warn" },
-      { value: "redeploy_admin",    label: "Redeploy Admin",    description: "Pull latest & restart admin service",    confirmation: "project", risk: "warn" },
+      { value: "redeploy_admin",    label: "Redeploy Admin",    description: "Pull latest & rebuild admin assets",     confirmation: "project", risk: "warn" },
       { value: "prisma_migrate_deploy", label: "Prisma Migrate", description: "Run pending database migrations",      confirmation: "project", risk: "danger" },
     ],
   },

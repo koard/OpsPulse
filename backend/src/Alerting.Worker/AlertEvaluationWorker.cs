@@ -6,6 +6,7 @@ namespace Alerting.Worker;
 public sealed class AlertEvaluationWorker(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
+    EmailNotifier emailNotifier,
     ILogger<AlertEvaluationWorker> logger) : BackgroundService
 {
     private readonly TimeSpan interval = TimeSpan.FromSeconds(
@@ -39,6 +40,7 @@ public sealed class AlertEvaluationWorker(
             }
 
             var alerts = AlertEvaluator.Evaluate(snapshot).ToList();
+
             foreach (var alert in alerts)
             {
                 logger.LogWarning(
@@ -46,6 +48,11 @@ public sealed class AlertEvaluationWorker(
                     alert.Severity,
                     alert.Title,
                     alert.Message);
+            }
+
+            if (alerts.Count > 0)
+            {
+                await emailNotifier.NotifyAsync(alerts, stoppingToken);
             }
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
