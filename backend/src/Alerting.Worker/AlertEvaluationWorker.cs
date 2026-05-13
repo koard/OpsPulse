@@ -14,6 +14,20 @@ public sealed class AlertEvaluationWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // For testing SMTP configuration
+        if (configuration.GetValue<bool>("Alerting:Email:SendTestOnStartup"))
+        {
+            logger.LogInformation("Sending test alert email...");
+            var testAlert = new AlertEvent(
+                Id: $"test-{Guid.NewGuid()}",
+                Severity: AlertSeverity.Warning,
+                Title: "Test Alert: SMTP Configured Successfully",
+                Message: "If you are reading this, your OpsPulse email notifications are working.",
+                CreatedAt: DateTimeOffset.UtcNow);
+            
+            await emailNotifier.NotifyAsync([testAlert], stoppingToken);
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             await EvaluateOnce(stoppingToken);

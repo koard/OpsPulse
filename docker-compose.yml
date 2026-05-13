@@ -68,6 +68,7 @@ services:
       Alerting__Email__From: ${ALERT_EMAIL_FROM:-}
       Alerting__Email__To: ${ALERT_EMAIL_TO:-}
       Alerting__Email__CooldownMinutes: ${ALERT_COOLDOWN_MINUTES:-30}
+      Alerting__Email__SendTestOnStartup: ${ALERT_TEST_ON_STARTUP:-false}
     depends_on:
       - telemetry
 
