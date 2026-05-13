@@ -83,6 +83,7 @@ export function DashboardShell({ payload }: DashboardShellProps) {
     dashboard.projects[0]?.id ?? "",
   );
   const [processSearch, setProcessSearch] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const summary = useMemo(() => buildDashboardSummary(dashboard), [dashboard]);
   const selectedProject =
@@ -167,7 +168,15 @@ export function DashboardShell({ payload }: DashboardShellProps) {
             <span className={`statusPill ${severityClass[projectSeverity]}`}>
               {severityLabel[projectSeverity]}
             </span>
-            <button className="iconButton" type="button" aria-label="Refresh">
+            <button
+              className={`iconButton ${isRefreshing ? "isLoading" : ""}`}
+              type="button"
+              aria-label="Refresh"
+              onClick={() => {
+                setIsRefreshing(true);
+                setTimeout(() => setIsRefreshing(false), 800); // Simulate refresh
+              }}
+            >
               <RefreshCcw aria-hidden="true" />
             </button>
           </div>
@@ -179,50 +188,57 @@ export function DashboardShell({ payload }: DashboardShellProps) {
             label="Projects"
             value={summary.totalProjects}
             detail="managed estate"
+            intent="info"
           />
           <MetricTile
             icon={<TerminalSquare aria-hidden="true" />}
             label="Online processes"
             value={summary.onlineProcesses}
             detail={`${selectedProject.processes.length} tracked here`}
+            intent={summary.onlineProcesses === selectedProject.processes.length ? "success" : "warn"}
           />
           <MetricTile
             icon={<CircleGauge aria-hidden="true" />}
             label="Health score"
             value={healthScore}
             detail="latest collection"
+            intent={healthScore >= 95 ? "success" : healthScore >= 80 ? "warn" : "critical"}
           />
           <MetricTile
             icon={<Bell aria-hidden="true" />}
             label="Open incidents"
             value={openIncidents.length}
             detail={`${summary.openCriticalAlerts} critical`}
+            intent={openIncidents.length === 0 ? "success" : summary.openCriticalAlerts > 0 ? "critical" : "warn"}
           />
           <MetricTile
             icon={<ClipboardCheck aria-hidden="true" />}
             label="Stale agents"
             value={staleAgents.length}
             detail="configuration drift"
+            intent={staleAgents.length === 0 ? "success" : "critical"}
           />
         </section>
 
         <nav className="tabs" aria-label="SRE dashboard sections">
           {[
-            ["overview", "Overview"],
-            ["incidents", "Incidents"],
-            ["slo", "SLO"],
-            ["agents", "Agents"],
-            ["actions", "Actions"],
-            ["deployments", "Deployments"],
-            ["runbook", "Runbook"],
-          ].map(([tab, label]) => (
+            { id: "overview", label: "Overview", icon: <Activity aria-hidden="true" /> },
+            { id: "incidents", label: "Incidents", icon: <AlertTriangle aria-hidden="true" />, count: openIncidents.length },
+            { id: "slo", label: "SLO", icon: <CheckCircle2 aria-hidden="true" /> },
+            { id: "agents", label: "Agents", icon: <Server aria-hidden="true" />, count: staleAgents.length },
+            { id: "actions", label: "Actions", icon: <TerminalSquare aria-hidden="true" /> },
+            { id: "deployments", label: "Deployments", icon: <GitBranch aria-hidden="true" /> },
+            { id: "runbook", label: "Runbook", icon: <ClipboardCheck aria-hidden="true" /> },
+          ].map((tab) => (
             <button
-              className={activeTab === tab ? "isActive" : ""}
-              key={tab}
-              onClick={() => setActiveTab(tab as DashboardTab)}
+              className={activeTab === tab.id ? "isActive" : ""}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as DashboardTab)}
               type="button"
             >
-              {label}
+              {tab.icon}
+              {tab.label}
+              {tab.count !== undefined && tab.count > 0 && <span className="tabBadge">{tab.count}</span>}
             </button>
           ))}
         </nav>
@@ -426,14 +442,16 @@ function MetricTile({
   icon,
   label,
   value,
+  intent = "info",
 }: {
   detail: string;
   icon: ReactNode;
   label: string;
   value: number;
+  intent?: "info" | "success" | "warn" | "critical";
 }) {
   return (
-    <article className="metricTile">
+    <article className="metricTile" data-intent={intent}>
       <div className="metricIcon">{icon}</div>
       <div>
         <span>{label}</span>
@@ -446,6 +464,8 @@ function MetricTile({
 
 function ProcessRow({ process }: { process: ProcessMetric }) {
   const isOnline = process.status === "online";
+  const cpuColor = process.cpuPercent > 80 ? "var(--color-danger)" : process.cpuPercent > 50 ? "var(--color-warn)" : "var(--color-info)";
+  const memoryFill = Math.min((process.memoryMb / 1024) * 100, 100);
 
   return (
     <div className="processRow" role="row">
@@ -454,15 +474,21 @@ function ProcessRow({ process }: { process: ProcessMetric }) {
         <small>{process.role}</small>
       </span>
       <span className={`processStatus ${isOnline ? "isOnline" : "isDown"}`}>
-        {isOnline ? (
-          <CheckCircle2 aria-hidden="true" />
-        ) : (
-          <AlertTriangle aria-hidden="true" />
-        )}
+        <span className="statusDot" />
         {process.status}
       </span>
-      <span>{process.cpuPercent}%</span>
-      <span>{process.memoryMb} MB</span>
+      <div className="miniBar">
+        <span>{process.cpuPercent}%</span>
+        <div className="miniBarTrack">
+          <div className="miniBarFill" style={{ width: `${process.cpuPercent}%`, backgroundColor: cpuColor }} />
+        </div>
+      </div>
+      <div className="miniBar">
+        <span>{process.memoryMb} MB</span>
+        <div className="miniBarTrack">
+          <div className="miniBarFill" style={{ width: `${memoryFill}%`, backgroundColor: "var(--color-success)" }} />
+        </div>
+      </div>
       <span>{formatUptime(process.uptimeSeconds)}</span>
     </div>
   );
@@ -676,7 +702,7 @@ function AgentInventory({ agents }: { agents: AgentStatus[] }) {
       </div>
       <div className="agentGrid">
         {agents.map((agent) => (
-          <article className="agentCard" key={agent.projectId}>
+          <article className={`agentCard ${agent.isStale ? "isStale" : ""}`} key={agent.projectId}>
             <div>
               <strong>{agent.agent?.hostname ?? agent.projectId}</strong>
               <small>{agent.agent?.os ?? "unknown os"} · PM2 {agent.agent?.pm2Version ?? "unknown"}</small>
@@ -785,18 +811,23 @@ function ActionsView({
           <TerminalSquare aria-hidden="true" className="panelIcon" />
         </div>
         <div className="actionForm">
-          <label>
-            <span>Action</span>
-            <select value={action} onChange={(event) => setAction(event.target.value as typeof action)}>
-              {commandActions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="actionSelector">
+            {commandActions.map((item) => (
+              <label key={item.value} className="actionOption">
+                <input
+                  type="radio"
+                  name="action"
+                  value={item.value}
+                  checked={action === item.value}
+                  onChange={(event) => setAction(event.target.value as typeof action)}
+                />
+                <strong>{item.label}</strong>
+                <span>{item.confirmation === "project" ? "Whole project" : "Specific process"}</span>
+              </label>
+            ))}
+          </div>
           {action === "pm2_restart_process" && (
-            <label>
+            <label className="inputLabel">
               <span>PM2 process</span>
               <select value={target} onChange={(event) => setTarget(event.target.value)}>
                 {processTargets.map((process) => (
@@ -807,9 +838,10 @@ function ActionsView({
               </select>
             </label>
           )}
-          <label>
-            <span>Type to confirm</span>
+          <label className="inputLabel">
+            <span>Type '{expectedConfirmation}' to confirm</span>
             <input
+              type="text"
               value={confirmation}
               onChange={(event) => setConfirmation(event.target.value)}
               placeholder={expectedConfirmation}
@@ -818,7 +850,7 @@ function ActionsView({
           <button disabled={!canSubmit} onClick={createCommand} type="button">
             Queue action
           </button>
-          {message && <small className="formMessage">{message}</small>}
+          {message && <small className="formMessage"><CheckCircle2 aria-hidden="true" size={14}/> {message}</small>}
         </div>
       </div>
 
