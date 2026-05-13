@@ -382,6 +382,28 @@ a { color: inherit; }
   border-color: rgba(45, 212, 191, 0.2);
 }
 
+.healthRing {
+  --score: 0;
+  display: grid;
+  place-items: center;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--bg-surface) 54%, transparent 55%),
+    conic-gradient(var(--accent) calc(var(--score) * 1%), rgba(148,163,184,0.15) 0);
+  box-shadow: inset 0 0 0 1px var(--border);
+  flex-shrink: 0;
+}
+
+.healthRing span {
+  font-family: var(--font-mono);
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.05em;
+}
+
 /* ── SLO UI ────────────────────────────────────── */
 .sloHero {
   display: flex;
