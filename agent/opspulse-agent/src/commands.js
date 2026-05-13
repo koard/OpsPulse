@@ -1,0 +1,225 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+const OUTPUT_LIMIT = 4096;
+const DEFAULT_COMMAND_TIMEOUT_MS = 120000;
+const allowedProcesses = new Set([
+  "dukefarm-backend",
+  "dukefarm-admin",
+  "dukefarm-frontend",
+  "opspulse-agent",
+]);
+
+export function planCommandSteps(command, config) {
+  const action = normalizeAction(command.action);
+  const backendDir = requireBackendDir(config);
+  const branch = config.dukeFarmBranch ?? "main";
+
+  switch (action) {
+    case "health_check_now":
+      return [];
+    case "pm2_restart_process":
+      assertAllowedProcess(command.target);
+      return [{ command: "pm2", args: ["restart", command.target] }];
+    case "redeploy_backend":
+      return [
+        { command: "git", args: ["fetch", "origin", branch], cwd: backendDir },
+        { command: "git", args: ["reset", "--hard", `origin/${branch}`], cwd: backendDir },
+        { command: "git", args: ["rev-parse", "HEAD"], cwd: backendDir, captureReleaseCommit: true },
+        { command: "npm", args: ["ci"], cwd: backendDir },
+        { command: "npm", args: ["run", "prisma:generate"], cwd: backendDir },
+        { command: "npm", args: ["run", "build"], cwd: backendDir },
+        { command: "pm2", args: ["restart", "dukefarm-backend"] },
+      ];
+    case "prisma_migrate_deploy":
+      return [{ command: "npx", args: ["prisma", "migrate", "deploy"], cwd: backendDir }];
+    case "rollback_backend":
+      if (!command.target) {
+        throw new Error("Rollback target commit is required");
+      }
+
+      return [
+        { command: "git", args: ["reset", "--hard", command.target], cwd: backendDir },
+        { command: "npm", args: ["ci"], cwd: backendDir },
+        { command: "npm", args: ["run", "prisma:generate"], cwd: backendDir },
+        { command: "npm", args: ["run", "build"], cwd: backendDir },
+        { command: "pm2", args: ["restart", "dukefarm-backend"] },
+      ];
+    default:
+      throw new Error(`Unsupported command action '${command.action}'`);
+  }
+}
+
+export async function executeOpsCommand(command, config, runner = runStep) {
+  const started = Date.now();
+  let stdout = "";
+  let stderr = "";
+  let releaseCommit = null;
+
+  try {
+    if (normalizeAction(command.action) === "health_check_now") {
+      const health = await runHealthChecks(config);
+      stdout += JSON.stringify(health, null, 2);
+      const failed = health.some((check) => check.statusCode < 200 || check.statusCode >= 400);
+      return {
+        status: failed ? "failed" : "succeeded",
+        summary: failed ? "One or more health checks failed." : "Health checks passed.",
+        stdout: tail(stdout),
+        stderr: "",
+        releaseCommit: null,
+      };
+    }
+
+    for (const step of planCommandSteps(command, config)) {
+      const result = await runner(step, config.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS);
+      stdout += `$ ${step.command} ${step.args.join(" ")}\n${result.stdout}\n`;
+      stderr += result.stderr ? `${result.stderr}\n` : "";
+      if (step.captureReleaseCommit) {
+        releaseCommit = result.stdout.trim().split(/\s+/)[0] ?? null;
+      }
+    }
+
+    if (["redeploy_backend", "rollback_backend"].includes(normalizeAction(command.action))) {
+      const health = await runHealthChecks(config);
+      stdout += `health verify\n${JSON.stringify(health, null, 2)}\n`;
+      if (health.some((check) => check.statusCode < 200 || check.statusCode >= 400)) {
+        return {
+          status: "failed",
+          summary: "Command executed but health verification failed.",
+          stdout: tail(stdout),
+          stderr: tail(stderr),
+          releaseCommit,
+        };
+      }
+    }
+
+    return {
+      status: "succeeded",
+      summary: `${command.action} completed.`,
+      stdout: tail(stdout),
+      stderr: tail(stderr),
+      releaseCommit,
+    };
+  } catch (error) {
+    const isTimeout = error?.code === "ETIMEDOUT" || /timed out/i.test(error?.message ?? "");
+    return {
+      status: isTimeout ? "timed_out" : "failed",
+      summary: error instanceof Error ? error.message : "Command failed.",
+      stdout: tail(stdout),
+      stderr: tail(`${stderr}${error?.stderr ?? ""}`),
+      releaseCommit,
+      durationMs: Date.now() - started,
+    };
+  }
+}
+
+export async function claimAndExecuteCommand(config) {
+  if (!config.commandsUrl) {
+    return null;
+  }
+
+  const claimResponse = await fetch(`${config.commandsUrl}/claim`, {
+    method: "POST",
+    headers: agentHeaders(config),
+    body: JSON.stringify({ projectId: config.projectId }),
+  });
+
+  if (claimResponse.status === 204) {
+    return null;
+  }
+
+  if (!claimResponse.ok) {
+    throw new Error(`claim failed: ${claimResponse.status} ${claimResponse.statusText}`);
+  }
+
+  const command = await claimResponse.json();
+  const result = await executeOpsCommand(command, config);
+  const resultResponse = await fetch(`${config.commandsUrl}/${command.id}/result`, {
+    method: "POST",
+    headers: agentHeaders(config),
+    body: JSON.stringify({
+      projectId: config.projectId,
+      ...result,
+    }),
+  });
+
+  if (!resultResponse.ok) {
+    throw new Error(`result failed: ${resultResponse.status} ${resultResponse.statusText}`);
+  }
+
+  return await resultResponse.json();
+}
+
+async function runStep(step, timeoutMs) {
+  return await execFileAsync(step.command, step.args, {
+    cwd: step.cwd,
+    timeout: timeoutMs,
+    windowsHide: true,
+    maxBuffer: 1024 * 1024,
+  });
+}
+
+async function runHealthChecks(config) {
+  return Promise.all([
+    checkEndpoint("DukeFarm API", `${config.dukeFarmBaseUrl}/healthz`),
+    checkEndpoint("DukeFarm API v1", `${config.dukeFarmBaseUrl}/api/v1/health`),
+  ]);
+}
+
+async function checkEndpoint(name, url) {
+  const started = Date.now();
+  try {
+    const response = await fetch(url);
+    return {
+      name,
+      url,
+      statusCode: response.status,
+      latencyMs: Date.now() - started,
+    };
+  } catch (error) {
+    return {
+      name,
+      url,
+      statusCode: 0,
+      latencyMs: Date.now() - started,
+      error: error instanceof Error ? error.message : "request failed",
+    };
+  }
+}
+
+function normalizeAction(action) {
+  return String(action)
+    .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+    .replace(/^_/, "")
+    .toLowerCase();
+}
+
+function assertAllowedProcess(processName) {
+  if (!allowedProcesses.has(processName)) {
+    throw new Error(`Process '${processName}' is not allowlisted`);
+  }
+}
+
+function requireBackendDir(config) {
+  if (!config.dukeFarmBackendDir) {
+    throw new Error("DUKEFARM_BACKEND_DIR is required for deployment commands");
+  }
+
+  return config.dukeFarmBackendDir;
+}
+
+function agentHeaders(config) {
+  return {
+    "Content-Type": "application/json",
+    "X-Agent-Token": config.token,
+  };
+}
+
+function tail(value) {
+  if (!value) {
+    return "";
+  }
+
+  return value.length <= OUTPUT_LIMIT ? value : value.slice(-OUTPUT_LIMIT);
+}

@@ -1,0 +1,14 @@
+**/.next/
+**/node_modules/
+**/out/
+**/dist/
+**/coverage/
+**/bin/
+**/obj/
+*.user
+*.suo
+.env
+.env.*
+!.env.example
+Dockerfile.local
+.next-dev.*

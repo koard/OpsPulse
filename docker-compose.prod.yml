@@ -1,0 +1,83 @@
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+      - gateway
+      - telemetry
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      OPSPULSE_DOMAIN: ${OPSPULSE_DOMAIN}
+    volumes:
+      - ./ops/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  project-registry:
+    image: ${PROJECT_REGISTRY_IMAGE:-opspulse-project-registry:latest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+
+  telemetry:
+    image: ${TELEMETRY_IMAGE:-opspulse-telemetry:latest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DATABASE_URL: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      AgentTokens__dukefarm-production: ${DUKEFARM_AGENT_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    image: ${GATEWAY_IMAGE:-opspulse-gateway:latest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      Services__ProjectRegistry: http://project-registry:8080
+      Services__Telemetry: http://telemetry:8080
+    depends_on:
+      - project-registry
+      - telemetry
+
+  alerting:
+    image: ${ALERTING_IMAGE:-opspulse-alerting:latest}
+    restart: unless-stopped
+    environment:
+      Services__Telemetry: http://telemetry:8080
+      Alerting__ProjectId: dukefarm-production
+      Alerting__IntervalSeconds: 30
+    depends_on:
+      - telemetry
+
+  web:
+    image: ${WEB_IMAGE:-opspulse-web:latest}
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://gateway:8080
+    depends_on:
+      - gateway
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:

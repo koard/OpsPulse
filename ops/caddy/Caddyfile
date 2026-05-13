@@ -1,0 +1,22 @@
+{$OPSPULSE_DOMAIN} {
+	encode gzip zstd
+
+	@ingest path /ingest/*
+	handle @ingest {
+		reverse_proxy telemetry:8080
+	}
+
+	@agent path /agent/*
+	handle @agent {
+		reverse_proxy telemetry:8080
+	}
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy gateway:8080
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

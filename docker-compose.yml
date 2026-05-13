@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: opspulse
+      POSTGRES_USER: opspulse
+      POSTGRES_PASSWORD: opspulse
+    ports:
+      - "5432:5432"
+    volumes:
+      - opspulse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opspulse -d opspulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  project-registry:
+    build:
+      context: ./backend
+      dockerfile: src/ProjectRegistry.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "5081:8080"
+
+  telemetry:
+    build:
+      context: ./backend
+      dockerfile: src/Telemetry.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DATABASE_URL: Host=postgres;Port=5432;Database=opspulse;Username=opspulse;Password=opspulse
+      AgentTokens__dukefarm-production: local-dev-token
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5082:8080"
+
+  gateway:
+    build:
+      context: ./backend
+      dockerfile: src/Gateway.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      Services__ProjectRegistry: http://project-registry:8080
+      Services__Telemetry: http://telemetry:8080
+    depends_on:
+      - project-registry
+      - telemetry
+    ports:
+      - "5080:8080"
+
+  alerting:
+    build:
+      context: ./backend
+      dockerfile: src/Alerting.Worker/Dockerfile
+    environment:
+      Services__Telemetry: http://telemetry:8080
+      Alerting__ProjectId: dukefarm-production
+      Alerting__IntervalSeconds: 30
+    depends_on:
+      - telemetry
+
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      API_BASE_URL: http://gateway:8080
+    depends_on:
+      - gateway
+    ports:
+      - "3000:3000"
+
+volumes:
+  opspulse_postgres_data:
