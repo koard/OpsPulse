@@ -77,6 +77,8 @@ services:
       context: ./apps/web
     environment:
       API_BASE_URL: http://gateway:8080
+      OPSPULSE_AUTH_PASSWORD: ${OPSPULSE_AUTH_PASSWORD:-local-dev-password}
+      OPSPULSE_AUTH_SESSION_SECRET: ${OPSPULSE_AUTH_SESSION_SECRET:-local-dev-session-secret-change-me}
     depends_on:
       - gateway
     ports:
