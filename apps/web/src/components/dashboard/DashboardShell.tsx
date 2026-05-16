@@ -15,6 +15,7 @@ import {
   GitBranch,
   Globe2,
   HardDrive,
+  LogOut,
   Network,
   ChevronRight,
   RefreshCcw,
@@ -180,6 +181,9 @@ export function DashboardShell({ payload }: DashboardShellProps) {
             >
               <RefreshCcw aria-hidden="true" />
             </button>
+            <a className="iconButton" href="/logout" aria-label="Logout" title="Logout">
+              <LogOut aria-hidden="true" />
+            </a>
           </div>
         </header>
 
